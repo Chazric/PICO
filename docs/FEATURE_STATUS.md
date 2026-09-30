@@ -30,7 +30,12 @@ keys/capabilities) · **Deferred** (later sprint per spec §17).
 | Compliance engine (5 statuses, per-country gating, review routing) | Implemented + Tested | `server/src/compliance/` — see docs/COMPLIANCE.md |
 | Acceptable Use Policy + Terms skeletons | Drafted | docs/legal/ — require legal review before production |
 | Emergency-calling disclosure | Implemented | Data-only plans state they cannot place calls incl. emergency calls |
+| Lifecycle transition log (immutable) | Implemented + Tested | `order_events` + `transitionOrder()` — V2 §7; see docs/ESIM_LIFECYCLE.md |
+| Structured compliance-review records | Implemented | `ComplianceReviewRecord` — V2 §1's 8 documented fields on every gate |
 | Offline receipts/instruction caching | Deferred | Sprint 3 |
+| CURRENT CONNECTION dashboard (V2 §3) | Deferred | Sprint 3 — needs supplier usage/carrier reporting; My Plans is the seed |
+| "Find My Plan" recommendation engine (V2 §4) | Deferred | Sprint 3 — needs real catalog breadth first |
+| Provider routing + failover (V2 §§10-11) | Deferred | Sprint 2+ — needs ≥2 real providers; timeout reconciliation already live |
 | Real eSIM supplier integration | Deferred | Sprint 2 — adapter interface in `server/src/supplier/types.ts` |
 | Arrival Assist (checklist, QR/manual install, SM-DP+ display) | Deferred | Sprint 2; activation code stored, not surfaced yet |
 | Multi-country Trip Mode | Deferred | Sprint 3 (spec §19.A — after first supplier is reliable) |
@@ -44,19 +49,24 @@ keys/capabilities) · **Deferred** (later sprint per spec §17).
 
 ## Test results (Sprint 1)
 
-- Backend: **21/21 vitest** — catalog disclosure completeness, server pricing,
+- Backend: **22/22 vitest** — catalog disclosure completeness, server pricing,
   destination/plan mismatch, idempotent order creation, unsigned/rejected
   webhooks, duplicate delivery (1 eSIM), failed payment (no provisioning),
   unknown-payment events stored, out-of-order refund-then-success, supplier
   timeout reconciliation without duplication, plan renaming, referral code
   issuance/validation/discount, credit-only-on-verified-payment, double-credit
   prevention, bad-code rejection, refund reversal, compliance gating
-  (unauthorized service rejected, unknown market → review, catalog statuses).
+  (unauthorized service rejected, unknown market → review, catalog statuses),
+  immutable lifecycle transition log.
 - App: **4/4 widget tests** — three tabs, browse→plans→detail flow with
   disclosure + mock labeling, My Plans honesty + referral card, Help "I can't connect".
 
 ## Required before anything real can charge or provision
 
+0. **Professional legal review of the actual business model and contracts** —
+   telephone numbers, voice/SMS, eSIM, KYC, privacy, consumer protection,
+   taxes, and every launch country. PICO must not launch regulated services
+   (or claim compliance) on engineering work alone. See docs/COMPLIANCE.md.
 1. Stripe **test** keys: `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`,
    `STRIPE_WEBHOOK_SECRET` in `server/.env` (never commit real `.env`).
 2. `flutter_stripe` platform setup (iOS `Stripe.podspec`, Android `PaymentConfiguration` + theme).

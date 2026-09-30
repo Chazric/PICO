@@ -156,3 +156,53 @@ export const MOCK_COUNTRY_RULES: Record<string, CountryRulePack> = {
 
 /** Risk levels for fraud/abuse controls (master spec §7, spec §19.D). */
 export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'BLOCKED';
+
+/**
+ * COMPLIANCE_REVIEW_REQUIRED record (V2 spec §1). When a regulated feature's
+ * rules can't be confidently determined, the feature stays disabled and one of
+ * these records documents exactly what must be resolved before it can ship.
+ */
+export interface ComplianceReviewRecord {
+  jurisdiction: string;
+  feature: ServiceType;
+  provider: string;
+  regulatoryQuestion: string;
+  informationRequired: string[];
+  technicalOptions: string[];
+  knownRisks: string[];
+  requiredConfirmation: string;
+}
+
+export function buildReviewRecord(
+  provider: ProviderComplianceRecord,
+  service: ServiceType,
+  country: string,
+  decision: ComplianceDecision,
+): ComplianceReviewRecord {
+  return {
+    jurisdiction: country,
+    feature: service,
+    provider: provider.providerLegalEntity,
+    regulatoryQuestion:
+      `May ${service} be offered to PICO customers in ${country} under the ` +
+      `provider's current authorization?`,
+    informationRequired: [
+      'Provider confirmation of country coverage for this service',
+      'Country rule pack (KYC, registration, numbering, emergency, AUP requirements)',
+      'Any required customer disclosures or verification steps',
+    ],
+    technicalOptions: [
+      'Keep feature disabled for this market (current default)',
+      'Enable only after provider contract amendment + rule pack on file',
+      'Offer via an alternate authorized provider if one exists',
+    ],
+    knownRisks: [
+      'Regulatory exposure if sold without authorization',
+      'Provider contract violation',
+      'Customer harm from service that cannot legally be delivered',
+    ],
+    requiredConfirmation:
+      `Written provider authorization for ${service} in ${country}, plus ` +
+      `compliance sign-off. Decision recorded: ${decision.status}`,
+  };
+}

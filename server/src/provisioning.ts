@@ -1,5 +1,5 @@
 import type { DB } from './db.js';
-import { now, uid } from './db.js';
+import { now, uid, transitionOrder } from './db.js';
 import type { SupplierAdapter } from './supplier/types.js';
 import { SupplierTimeout } from './supplier/types.js';
 import type { MockSupplier } from './supplier/mock.js';
@@ -42,7 +42,7 @@ export class Provisioner {
            ON CONFLICT(order_id) DO NOTHING`,
         ).run(uid(), orderId, res.iccid, res.activationCode, res.smdpAddress, res.isMock ? 1 : 0, now(), now());
         this.db.prepare(`UPDATE provisioning_jobs SET status='succeeded', updated_at=? WHERE id=?`).run(now(), job.id);
-        this.db.prepare(`UPDATE orders SET status='provisioned', updated_at=? WHERE id=?`).run(now(), orderId);
+        transitionOrder(this.db, orderId, 'provisioned');
       })();
       return 'succeeded';
     } catch (err) {
@@ -57,20 +57,22 @@ export class Provisioner {
                ON CONFLICT(order_id) DO NOTHING`,
             ).run(uid(), orderId, existing.iccid, existing.activationCode, existing.smdpAddress, existing.isMock ? 1 : 0, now(), now());
             this.db.prepare(`UPDATE provisioning_jobs SET status='succeeded', updated_at=? WHERE id=?`).run(now(), job.id);
-            this.db.prepare(`UPDATE orders SET status='provisioned', updated_at=? WHERE id=?`).run(now(), orderId);
+            transitionOrder(this.db, orderId, 'provisioned',
+              { detail: 'provisioned after supplier timeout, reconciled via lookupProvision' });
           })();
           return 'succeeded';
         }
         const next = job.attempts + 1 >= MAX_ATTEMPTS ? 'needs_reconciliation' : 'queued';
         this.db.prepare(`UPDATE provisioning_jobs SET status=?, last_error=?, updated_at=? WHERE id=?`)
           .run(next, String(err), now(), job.id);
-        this.db.prepare(`UPDATE orders SET status='needs_review', updated_at=? WHERE id=?`).run(now(), orderId);
+        transitionOrder(this.db, orderId, 'needs_review',
+          { detail: 'supplier unreachable; provisioning outcome unconfirmed' });
         return next;
       }
       this.db.prepare(`UPDATE provisioning_jobs SET status='failed', last_error=?, updated_at=? WHERE id=?`)
         .run(String(err), now(), job.id);
-      this.db.prepare(`UPDATE orders SET status='needs_review', failure_reason=?, updated_at=? WHERE id=?`)
-        .run(`provisioning failed: ${String(err)}`, now(), orderId);
+      transitionOrder(this.db, orderId, 'needs_review',
+        { failureReason: `provisioning failed: ${String(err)}`, detail: 'supplier provisioning failed' });
       return 'failed';
     }
   }

@@ -1,13 +1,13 @@
 import express, { type Express, type Request, type Response } from 'express';
 import { z } from 'zod';
 import type { DB } from './db.js';
-import { now, uid } from './db.js';
+import { now, uid, transitionOrder } from './db.js';
 import type { BillingAdapter } from './billing.js';
 import type { SupplierAdapter } from './supplier/types.js';
 import { Provisioner } from './provisioning.js';
 import { config } from './config.js';
 import * as referrals from './referrals.js';
-import { evaluateService, MOCK_PROVIDER, MOCK_COUNTRY_RULES } from './compliance/statuses.js';
+import { evaluateService, buildReviewRecord, MOCK_PROVIDER, MOCK_COUNTRY_RULES } from './compliance/statuses.js';
 
 export interface Deps {
   db: DB;
@@ -156,10 +156,12 @@ export function createApp(deps: Deps): Express {
       return;
     }
     if (decision.requiresReview) {
-      // REQUIRES COMPLIANCE REVIEW — route to manual review, no charge created.
+      // COMPLIANCE_REVIEW_REQUIRED — structured record per V2 spec §1. The
+      // feature stays disabled and no charge is created until resolved.
+      const review = buildReviewRecord(MOCK_PROVIDER, 'esim_data', plan.destination, decision);
       db.prepare(`INSERT INTO admin_events (id, actor, action, order_id, detail, created_at)
         VALUES (?, 'system', 'compliance_review', ?, ?, ?)`).run(uid(), null,
-        JSON.stringify({ destination: plan.destination, planId: plan.planId, decision }), now());
+        JSON.stringify({ planId: plan.planId, review }), now());
       res.status(409).json({ error: 'this purchase needs a compliance review first', compliance: decision });
       return;
     }
@@ -199,6 +201,8 @@ export function createApp(deps: Deps): Express {
       ).run(orderId, plan.planId, plan.destination, plan.priceCents, plan.currency, taxCents,
         pi.paymentIntentId, body.data.planName ?? null, appliedCode, discountCents, now(), now());
       if (appliedCode) referrals.redeem(db, orderId, appliedCode, plan.priceCents);
+      db.prepare(`INSERT INTO order_events (id, order_id, from_status, to_status, actor, detail, created_at)
+        VALUES (?, ?, NULL, 'created', 'system', 'order placed', ?)`).run(uid(), orderId, now());
     })();
     if (idemKey) {
       db.prepare(`INSERT INTO idempotency_keys (key, endpoint, resource_id, created_at) VALUES (?, 'create_order', ?, ?)`)
@@ -332,10 +336,9 @@ async function handleStripeEvent(
   if (!orderId) return; // not a PICO payment — ignore but keep the event row
 
   if (ev.type === 'payment_intent.succeeded') {
-    const updated = db.prepare(
-      `UPDATE orders SET status='provisioning', updated_at=? WHERE id=? AND status IN ('created','payment_failed')`,
-    ).run(now(), orderId);
-    if (updated.changes > 0) {
+    const moved = transitionOrder(db, orderId, 'provisioning',
+      { from: ['created', 'payment_failed'], detail: 'verified payment_intent.succeeded' });
+    if (moved) {
       // Sequence per master spec §16: verified payment -> compliance
       // verification -> provider provisioning. If a market rule changed between
       // order and payment, stop here — hold for review, never auto-provision.
@@ -345,11 +348,12 @@ async function handleStripeEvent(
         ? evaluateService(MOCK_PROVIDER, 'esim_data', order.destination, MOCK_COUNTRY_RULES[order.destination])
         : null;
       if (decision?.requiresReview || decision?.status === 'NOT_AVAILABLE') {
-        db.prepare(`UPDATE orders SET status='needs_review', updated_at=? WHERE id=?`)
-          .run(now(), orderId);
+        const review = buildReviewRecord(MOCK_PROVIDER, 'esim_data', order!.destination, decision!);
+        transitionOrder(db, orderId, 'needs_review',
+          { detail: `compliance checkpoint after payment: ${decision!.status}` });
         db.prepare(`INSERT INTO admin_events (id, actor, action, order_id, detail, created_at)
           VALUES (?, 'system', 'compliance_hold', ?, ?, ?)`)
-          .run(uid(), orderId, JSON.stringify(decision), now());
+          .run(uid(), orderId, JSON.stringify(review), now());
       } else {
         provisioner.enqueue(orderId, `prov-${orderId}`);
         await provisioner.processOrder(orderId);
@@ -361,12 +365,11 @@ async function handleStripeEvent(
     // If status didn't move (already provisioned / refunded / canceled), the event
     // is a duplicate or out-of-order — durable record kept, no re-fulfillment.
   } else if (ev.type === 'payment_intent.payment_failed') {
-    db.prepare(
-      `UPDATE orders SET status='payment_failed', failure_reason='payment declined', updated_at=? WHERE id=? AND status='created'`,
-    ).run(now(), orderId);
+    transitionOrder(db, orderId, 'payment_failed',
+      { from: ['created'], failureReason: 'payment declined' });
   } else if (ev.type === 'charge.refunded' || ev.type === 'payment_intent.canceled') {
-    db.prepare(`UPDATE orders SET status=?, updated_at=? WHERE id=?`)
-      .run(ev.type === 'charge.refunded' ? 'refunded' : 'canceled', now(), orderId);
+    transitionOrder(db, orderId,
+      ev.type === 'charge.refunded' ? 'refunded' : 'canceled');
     // Revoke the referral: redemption voids and any posted credit is reversed
     // by a negative ledger entry (append-only, idempotent).
     referrals.voidRedemption(db, orderId);
@@ -382,11 +385,15 @@ function getOrder(db: DB, id: string) {
   const job = db.prepare(
     `SELECT status, attempts, last_error FROM provisioning_jobs WHERE order_id=?`,
   ).get(id) as any;
+  const events = db.prepare(
+    `SELECT from_status, to_status, detail, created_at FROM order_events WHERE order_id=? ORDER BY created_at`,
+  ).all(id) as any[];
   return {
     ...order,
     // activation_code is deliberately excluded from the default read path —
     // it's a credential; expose only via an authenticated channel (Sprint 2).
     esim: profile ?? null,
     provisioning: job ?? null,
+    events, // lifecycle audit trail (V2 spec §7)
   };
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import request from 'supertest';
-import { makeFixture } from './helpers.js';
+import { makeFixture, createOrder, payOrder } from './helpers.js';
 import { evaluateService, MOCK_PROVIDER, MOCK_COUNTRY_RULES } from '../src/compliance/statuses.js';
 
 describe('compliance engine (master spec §§1,2,4)', () => {
@@ -36,5 +36,17 @@ describe('compliance engine (master spec §§1,2,4)', () => {
     const fx = makeFixture();
     const res = await request(fx.app).get('/api/v1/catalog/plans?destination=FR');
     expect(res.body.compliance.status).toBe('APPROVED_WITH_CONDITIONS');
+  });
+
+  it('logs every lifecycle transition as an immutable event (V2 spec §7)', async () => {
+    const fx = makeFixture();
+    const { order } = await createOrder(fx, 'mock-fr-light', 'idem-lifecycle-1');
+    await payOrder(fx, order.id, 'succeeded');
+    const res = await request(fx.app).get(`/api/v1/orders/${order.id}`);
+    const transitions = res.body.order.events.map((e: any) => `${e.from_status ?? '∅'}→${e.to_status}`);
+    expect(transitions).toEqual(['∅→created', 'created→provisioning', 'provisioning→provisioned']);
+    // The raw table is append-only proof for audits/disputes.
+    const count = fx.db.prepare(`SELECT COUNT(*) c FROM order_events WHERE order_id=?`).get(order.id) as any;
+    expect(count.c).toBe(3);
   });
 });
