@@ -1,0 +1,57 @@
+# Feature status — end of Sprint 1
+
+Labels: **Implemented** (working code) · **Tested** (automated coverage) ·
+**Mocked** (simulated, clearly labeled) · **Provider-dependent** (needs real
+keys/capabilities) · **Deferred** (later sprint per spec §17).
+
+| Feature | Status | Notes |
+|---|---|---|
+| Three tabs: Travel / My Plans / Help | Implemented + Tested | Widget tests cover all three |
+| Destination browse without sign-in | Implemented + Tested | |
+| Plan browsing (Light/Everyday/Heavy + view-all) | Implemented + Tested | Mock catalog: FR, JP, US, EU38 region |
+| Full plan disclosures (price, allowance, validity, calls/SMS, hotspot, renewal…) | Implemented + Tested | All spec §5 fields surfaced |
+| Compatibility guidance | Implemented | Customer-confirmed checks; no fabricated "Unlocked"/"eSIM-capable" |
+| Information provenance labels (device/supplier/customer/unknown) | Implemented | `SourceChip` UI component |
+| Server-priced orders + idempotency keys | Implemented + Tested | |
+| Order summary (products, total, taxes, future charges, terms) | Implemented | Tax = $0 placeholder pending jurisdiction rules (§16) |
+| Stripe PaymentIntent flow | Implemented + Tested | Mock adapter when no `sk_test_` key; real `StripeBilling` wired |
+| Stripe Payment Sheet (client) | Provider-dependent | `flutter_stripe` dependency present; guarded path — needs `pk_test_` key + platform config |
+| Webhook signature verification (raw body) | Implemented + Tested | Real HMAC scheme; mock secret in test mode |
+| Durable webhook receipt + dedup | Implemented + Tested | `webhook_events` table |
+| Provisioning queue + retries + timeout reconciliation | Implemented + Tested | Supplier timeout ≠ failure: reconcile via `lookupProvision` |
+| Mock provisioning (explicit, labeled) | Implemented + Tested | `is_mock` flag on every eSIM profile |
+| Duplicate/out-of-order event protection | Implemented + Tested | One paid order can never mint two eSIMs |
+| Refund/cancel state handling | Implemented + Tested | |
+| Plan naming ("France Trip") | Implemented + Tested | spec §19.B |
+| My Plans contextual next action + honest unavailable data | Implemented + Tested | spec §19.C |
+| "I can't connect" guided checks | Implemented | spec §10 |
+| Connection check (small, customer-triggered, consent for larger tests) | Implemented | spec §19.E — explain-it's-limited copy included |
+| Offline receipts/instruction caching | Deferred | Sprint 3 |
+| Real eSIM supplier integration | Deferred | Sprint 2 — adapter interface in `server/src/supplier/types.ts` |
+| Arrival Assist (checklist, QR/manual install, SM-DP+ display) | Deferred | Sprint 2; activation code stored, not surfaced yet |
+| Multi-country Trip Mode | Deferred | Sprint 3 (spec §19.A — after first supplier is reliable) |
+| Usage reporting / top-ups | Deferred | Sprint 3 — My Plans honestly says "not available yet" |
+| Telephony (calls/texts/numbers) | Deferred | Sprint 4 — never implied by UI |
+| Fraud/abuse controls (velocity, risk review) | Deferred | spec §19.D — Stripe Radar config + limits are ops work |
+| Optional PICO assistant | Deferred | spec §19.F — after guided flows are reliable |
+| App Attest / Play Integrity | Deferred | spec §14 — needs provider setup |
+| Auth/accounts | Deferred | Guest checkout first; purchase recovery pending |
+| iOS/Android native builds & signing | Deferred | No Xcode/Google Play access on this machine |
+
+## Test results (Sprint 1)
+
+- Backend: **11/11 vitest** — catalog disclosure completeness, server pricing,
+  destination/plan mismatch, idempotent order creation, unsigned/rejected
+  webhooks, duplicate delivery (1 eSIM), failed payment (no provisioning),
+  unknown-payment events stored, out-of-order refund-then-success, supplier
+  timeout reconciliation without duplication, plan renaming.
+- App: **4/4 widget tests** — three tabs, browse→plans→detail flow with
+  disclosure + mock labeling, My Plans honesty, Help "I can't connect".
+
+## Required before anything real can charge or provision
+
+1. Stripe **test** keys: `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`,
+   `STRIPE_WEBHOOK_SECRET` in `server/.env` (never commit real `.env`).
+2. `flutter_stripe` platform setup (iOS `Stripe.podspec`, Android `PaymentConfiguration` + theme).
+3. A real supplier contract + adapter implementing `server/src/supplier/types.ts`.
+4. App signing/toolchain (Xcode, Play Console) — outside this environment.

@@ -24,6 +24,15 @@ export function createApp(deps: Deps): Express {
   const app = express();
   const { db, billing, supplier, provisioner } = deps;
 
+  // Dev-friendly CORS — tighten to known origins before production.
+  app.use((req, res, next) => {
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Headers', 'content-type, idempotency-key, stripe-signature');
+    res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    if (req.method === 'OPTIONS') { res.sendStatus(204); return; }
+    next();
+  });
+
   // Stripe webhook needs the raw body for signature verification — mount raw
   // on that route BEFORE express.json().
   /** Shared pipeline: verify signature -> durable receipt (deduped) -> fulfill. */
