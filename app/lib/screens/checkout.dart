@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_stripe/flutter_stripe.dart' hide Card;
 import '../api.dart';
 import '../order_store.dart';
 import '../theme.dart';
@@ -85,11 +86,35 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       }
       return;
     }
-    // Real path (Provider-dependent): Stripe Payment Sheet with the
-    // server-issued PaymentIntent client secret. Requires pk_test_... key and
-    // platform setup — see docs/FEATURE_STATUS.md.
-    throw UnimplementedError('Stripe Payment Sheet requires configured keys — '
-        'see docs/FEATURE_STATUS.md');
+    // Real path: Stripe Payment Sheet with the server-issued PaymentIntent
+    // client secret. Fulfillment still comes only from Stripe's webhook —
+    // this only collects the payment; the order status screen polls.
+    final pk = r.payment.publishableKey;
+    if (pk == null || pk.isEmpty) {
+      throw Exception('Payment is not configured — publishable key missing.');
+    }
+    try {
+      Stripe.publishableKey = pk;
+      await Stripe.instance.initPaymentSheet(
+        paymentSheetParameters: SetupPaymentSheetParameters(
+          paymentIntentClientSecret: r.payment.clientSecret,
+          merchantDisplayName: 'PICO',
+          style: ThemeMode.system,
+        ),
+      );
+      await Stripe.instance.presentPaymentSheet();
+    } on StripeException catch (e) {
+      // Customer cancelled the sheet — stay on checkout, nothing to roll back
+      // (the order exists unpaid; their next attempt reuses it via idempotency).
+      if (e.error.code == FailureCode.Canceled) return;
+      rethrow;
+    }
+    await widget.store.add(r.order.id);
+    if (mounted) {
+      Navigator.pushReplacement(context, MaterialPageRoute(
+        builder: (_) => OrderStatusScreen(api: widget.api, orderId: r.order.id,
+            onDone: widget.onPurchased)));
+    }
   }
 
   @override
