@@ -182,6 +182,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   'Activate within ${plan.activationDeadlineDays} days. '
                   'Refundable until the eSIM is installed.',
                   style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(height: 6),
+              Text('Data-only plan — cannot place calls, including emergency calls.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600)),
             ]),
           )),
           if (_error != null) Padding(
@@ -255,6 +259,11 @@ class _PaymentSection extends StatelessWidget {
   final Future<void> Function() onPay;
   const _PaymentSection({required this.result, required this.busy, required this.onPay});
 
+  static const _terms =
+      'By paying you accept the PICO Terms of Service and Acceptable Use Policy '
+      '(drafts pending legal review — see docs/legal/). Connectivity is provided '
+      'by third-party carriers; coverage and availability are not guaranteed.';
+
   @override
   Widget build(BuildContext context) {
     final mock = result.payment.mock;
@@ -262,6 +271,9 @@ class _PaymentSection extends StatelessWidget {
       if (mock) const MockBanner(
         'TEST payment — no real charge. In production this shows the Stripe '
         'Payment Sheet (Apple Pay / Google Pay where configured).'),
+      Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Text(_terms, style: Theme.of(context).textTheme.bodySmall)),
       FilledButton.icon(
         onPressed: busy ? null : onPay,
         icon: Icon(mock ? Icons.science_outlined : Icons.lock_outline),

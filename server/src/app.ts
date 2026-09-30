@@ -7,6 +7,7 @@ import type { SupplierAdapter } from './supplier/types.js';
 import { Provisioner } from './provisioning.js';
 import { config } from './config.js';
 import * as referrals from './referrals.js';
+import { evaluateService, MOCK_PROVIDER, MOCK_COUNTRY_RULES } from './compliance/statuses.js';
 
 export interface Deps {
   db: DB;
@@ -93,19 +94,35 @@ export function createApp(deps: Deps): Express {
     });
   });
 
+  // Compliance gate (master spec §1): every destination carries an explicit
+  // status evaluated against the provider's authorization — never assumed.
+  const complianceFor = (country: string) =>
+    evaluateService(MOCK_PROVIDER, 'esim_data', country, MOCK_COUNTRY_RULES[country]);
+
   app.get('/api/v1/catalog/destinations', (_req, res) => {
-    res.json({ destinations: supplier.listDestinations(), supplier: supplier.name });
+    const destinations = supplier.listDestinations()
+      .map((d) => ({ ...d, compliance: complianceFor(d.code) }))
+      .filter((d) => d.compliance.status !== 'NOT_AVAILABLE');
+    res.json({ destinations, supplier: supplier.name });
   });
 
   app.get('/api/v1/catalog/plans', (req, res) => {
     const destination = typeof req.query.destination === 'string' ? req.query.destination : undefined;
-    res.json({ plans: supplier.listPlans(destination), supplier: supplier.name });
+    const compliance = destination ? complianceFor(destination) : null;
+    if (compliance && (compliance.status === 'NOT_AVAILABLE' || compliance.requiresReview)) {
+      res.status(compliance.status === 'NOT_AVAILABLE' ? 404 : 409).json({
+        error: 'service not offerable in this market',
+        compliance,
+      });
+      return;
+    }
+    res.json({ plans: supplier.listPlans(destination), supplier: supplier.name, compliance });
   });
 
   app.get('/api/v1/catalog/plans/:planId', (req, res) => {
     const plan = supplier.getPlan(req.params.planId);
     if (!plan) { res.status(404).json({ error: 'plan not found' }); return; }
-    res.json({ plan, supplier: supplier.name });
+    res.json({ plan, supplier: supplier.name, compliance: complianceFor(plan.destination) });
   });
 
   // Create an order + PaymentIntent. Price is always re-derived server-side.
@@ -128,6 +145,22 @@ export function createApp(deps: Deps): Express {
     if (!plan) { res.status(404).json({ error: 'plan not found' }); return; }
     if (plan.destination !== body.data.destination) {
       res.status(400).json({ error: 'plan does not cover that destination' });
+      return;
+    }
+
+    // Compliance gate at purchase time (master spec §1/§4): never sell into a
+    // market the provider hasn't authorized, never auto-provision when unsure.
+    const decision = complianceFor(plan.destination);
+    if (decision.status === 'NOT_AVAILABLE') {
+      res.status(409).json({ error: 'this plan is not available in that market', compliance: decision });
+      return;
+    }
+    if (decision.requiresReview) {
+      // REQUIRES COMPLIANCE REVIEW — route to manual review, no charge created.
+      db.prepare(`INSERT INTO admin_events (id, actor, action, order_id, detail, created_at)
+        VALUES (?, 'system', 'compliance_review', ?, ?, ?)`).run(uid(), null,
+        JSON.stringify({ destination: plan.destination, planId: plan.planId, decision }), now());
+      res.status(409).json({ error: 'this purchase needs a compliance review first', compliance: decision });
       return;
     }
 
@@ -303,8 +336,24 @@ async function handleStripeEvent(
       `UPDATE orders SET status='provisioning', updated_at=? WHERE id=? AND status IN ('created','payment_failed')`,
     ).run(now(), orderId);
     if (updated.changes > 0) {
-      provisioner.enqueue(orderId, `prov-${orderId}`);
-      await provisioner.processOrder(orderId);
+      // Sequence per master spec §16: verified payment -> compliance
+      // verification -> provider provisioning. If a market rule changed between
+      // order and payment, stop here — hold for review, never auto-provision.
+      const order = db.prepare(`SELECT plan_id, destination FROM orders WHERE id=?`)
+        .get(orderId) as { plan_id: string; destination: string } | undefined;
+      const decision = order
+        ? evaluateService(MOCK_PROVIDER, 'esim_data', order.destination, MOCK_COUNTRY_RULES[order.destination])
+        : null;
+      if (decision?.requiresReview || decision?.status === 'NOT_AVAILABLE') {
+        db.prepare(`UPDATE orders SET status='needs_review', updated_at=? WHERE id=?`)
+          .run(now(), orderId);
+        db.prepare(`INSERT INTO admin_events (id, actor, action, order_id, detail, created_at)
+          VALUES (?, 'system', 'compliance_hold', ?, ?, ?)`)
+          .run(uid(), orderId, JSON.stringify(decision), now());
+      } else {
+        provisioner.enqueue(orderId, `prov-${orderId}`);
+        await provisioner.processOrder(orderId);
+      }
     }
     // Referral credit posts only on verified payment — same trust boundary as
     // fulfillment. Safe on replays: the ledger unique key dedupes.

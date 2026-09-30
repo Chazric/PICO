@@ -27,6 +27,9 @@ keys/capabilities) · **Deferred** (later sprint per spec §17).
 | My Plans contextual next action + honest unavailable data | Implemented + Tested | spec §19.C |
 | "I can't connect" guided checks | Implemented | spec §10 |
 | Connection check (small, customer-triggered, consent for larger tests) | Implemented | spec §19.E — explain-it's-limited copy included |
+| Compliance engine (5 statuses, per-country gating, review routing) | Implemented + Tested | `server/src/compliance/` — see docs/COMPLIANCE.md |
+| Acceptable Use Policy + Terms skeletons | Drafted | docs/legal/ — require legal review before production |
+| Emergency-calling disclosure | Implemented | Data-only plans state they cannot place calls incl. emergency calls |
 | Offline receipts/instruction caching | Deferred | Sprint 3 |
 | Real eSIM supplier integration | Deferred | Sprint 2 — adapter interface in `server/src/supplier/types.ts` |
 | Arrival Assist (checklist, QR/manual install, SM-DP+ display) | Deferred | Sprint 2; activation code stored, not surfaced yet |
@@ -41,13 +44,14 @@ keys/capabilities) · **Deferred** (later sprint per spec §17).
 
 ## Test results (Sprint 1)
 
-- Backend: **16/16 vitest** — catalog disclosure completeness, server pricing,
+- Backend: **21/21 vitest** — catalog disclosure completeness, server pricing,
   destination/plan mismatch, idempotent order creation, unsigned/rejected
   webhooks, duplicate delivery (1 eSIM), failed payment (no provisioning),
   unknown-payment events stored, out-of-order refund-then-success, supplier
   timeout reconciliation without duplication, plan renaming, referral code
   issuance/validation/discount, credit-only-on-verified-payment, double-credit
-  prevention, bad-code rejection, refund reversal.
+  prevention, bad-code rejection, refund reversal, compliance gating
+  (unauthorized service rejected, unknown market → review, catalog statuses).
 - App: **4/4 widget tests** — three tabs, browse→plans→detail flow with
   disclosure + mock labeling, My Plans honesty + referral card, Help "I can't connect".
 

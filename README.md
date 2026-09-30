@@ -9,7 +9,7 @@ A simple international travel eSIM and connectivity app for iOS and Android.
 |---|---|
 | `app/` | Flutter app (iOS + Android), three tabs: Travel, My Plans, Help |
 | `server/` | TypeScript Node/Express backend: catalog, orders, Stripe webhook, provisioning |
-| `docs/` | Specification, API contract, capability matrix, feature status, recovery |
+| `docs/` | Specification, API contract, capability matrix, feature status, recovery, compliance (COMPLIANCE.md, NUMBERING_COMPLIANCE.md, legal/) |
 | `assets/` | Approved PICO artwork (navy app icon, mascot) |
 
 ## Quick start (local test mode)
@@ -39,7 +39,14 @@ flutter test
 Travel tab → pick a destination → browse three plans (Light/Everyday/Heavy)
 with full disclosures → confirm compatibility (customer-confirmed, honestly
 labeled) → order summary → *test* payment → signed webhook → durable order →
-mock provisioning → eSIM appears in My Plans → rename it ("France Trip").
+mock provisioning → eSIM appears in My Plans → rename it ("France Trip") →
+a "Give $5 — Get $5" referral code is issued; a friend redeeming it gets $5 off
+and you get $5 credit once their payment verifies.
+
+Every market carries an explicit compliance status (APPROVED / APPROVED WITH
+CONDITIONS / REQUIRES ADDITIONAL VERIFICATION / NOT AVAILABLE / LEGAL REVIEW
+REQUIRED) — nothing regulated is sold into a market the provider hasn't
+authorized, and unknowns route to review instead of auto-provisioning.
 
 The full payment path is real: orders are server-priced, a PaymentIntent-shaped
 object is created, and fulfillment only happens after a **verified, signed

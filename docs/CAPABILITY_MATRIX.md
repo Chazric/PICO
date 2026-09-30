@@ -15,9 +15,17 @@ without the listed evidence source.
 | Selected data SIM / roaming setting | Device-verified | Not exposed cross-platform — guided steps (customer-confirmed) |
 | Internet reachability | Device-verified (small check) | Implemented — explicitly disclaimed: proves SOME connection, not that PICO carries it |
 | Remaining allowance / usage | Supplier-reported | Deferred to Sprint 3 — UI says "not available yet", never fabricated |
-| Local phone number, calls, SMS | Supplier-reported | Not in catalog — UI states data-only, never implies a number |
+| Local phone number, calls, SMS | Supplier-reported | Not in catalog — UI states data-only, never implies a number; emergency calling explicitly disclosed as unavailable |
+| Caller ID / number issuance | Provider-authorized only | Not offered; arbitrary caller-ID input banned by design (docs/NUMBERING_COMPLIANCE.md) |
+| Market eligibility per country | Compliance engine | Implemented — explicit status per destination; unknown markets route to review, never auto-sold |
 | Direct eSIM install | Capability-gated | Off — QR/manual path is the Sprint 2 default |
 | Multi-network roaming, zero-data access, background usage, native calls/SMS, Live Activities | Capability-gated | All off (spec §15) |
+
+## Compliance statuses (master spec §1)
+
+`APPROVED` · `APPROVED_WITH_CONDITIONS` · `REQUIRES_ADDITIONAL_VERIFICATION` ·
+`NOT_AVAILABLE` · `LEGAL_REVIEW_REQUIRED` — evaluated per country × service in
+`server/src/compliance/statuses.ts`; see docs/COMPLIANCE.md for the full map.
 
 ## Platform gates
 
