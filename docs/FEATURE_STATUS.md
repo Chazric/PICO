@@ -22,6 +22,7 @@ keys/capabilities) · **Deferred** (later sprint per spec §17).
 | Mock provisioning (explicit, labeled) | Implemented + Tested | `is_mock` flag on every eSIM profile |
 | Duplicate/out-of-order event protection | Implemented + Tested | One paid order can never mint two eSIMs |
 | Refund/cancel state handling | Implemented + Tested | |
+| Referral "Give $5, Get $5" (code, checkout discount, credit ledger) | Implemented + Tested | Credit posts only on verified payment; revoked on refund. Spending accrued credit waits for accounts |
 | Plan naming ("France Trip") | Implemented + Tested | spec §19.B |
 | My Plans contextual next action + honest unavailable data | Implemented + Tested | spec §19.C |
 | "I can't connect" guided checks | Implemented | spec §10 |
@@ -31,7 +32,7 @@ keys/capabilities) · **Deferred** (later sprint per spec §17).
 | Arrival Assist (checklist, QR/manual install, SM-DP+ display) | Deferred | Sprint 2; activation code stored, not surfaced yet |
 | Multi-country Trip Mode | Deferred | Sprint 3 (spec §19.A — after first supplier is reliable) |
 | Usage reporting / top-ups | Deferred | Sprint 3 — My Plans honestly says "not available yet" |
-| Telephony (calls/texts/numbers) | Deferred | Sprint 4 — never implied by UI |
+| Telephony (calls/texts/numbers) | Deferred | Sprint 4 — never implied by UI; guardrails in docs/NUMBERING_COMPLIANCE.md |
 | Fraud/abuse controls (velocity, risk review) | Deferred | spec §19.D — Stripe Radar config + limits are ops work |
 | Optional PICO assistant | Deferred | spec §19.F — after guided flows are reliable |
 | App Attest / Play Integrity | Deferred | spec §14 — needs provider setup |
@@ -40,13 +41,15 @@ keys/capabilities) · **Deferred** (later sprint per spec §17).
 
 ## Test results (Sprint 1)
 
-- Backend: **11/11 vitest** — catalog disclosure completeness, server pricing,
+- Backend: **16/16 vitest** — catalog disclosure completeness, server pricing,
   destination/plan mismatch, idempotent order creation, unsigned/rejected
   webhooks, duplicate delivery (1 eSIM), failed payment (no provisioning),
   unknown-payment events stored, out-of-order refund-then-success, supplier
-  timeout reconciliation without duplication, plan renaming.
+  timeout reconciliation without duplication, plan renaming, referral code
+  issuance/validation/discount, credit-only-on-verified-payment, double-credit
+  prevention, bad-code rejection, refund reversal.
 - App: **4/4 widget tests** — three tabs, browse→plans→detail flow with
-  disclosure + mock labeling, My Plans honesty, Help "I can't connect".
+  disclosure + mock labeling, My Plans honesty + referral card, Help "I can't connect".
 
 ## Required before anything real can charge or provision
 

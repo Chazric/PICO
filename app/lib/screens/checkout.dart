@@ -25,8 +25,34 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   bool _busy = false;
   String? _error;
   CreateOrderResult? _result;
+  final _refCtrl = TextEditingController();
+  bool _refBusy = false;
+  String? _appliedCode;
+  int _discountCents = 0;
+  String? _refError;
 
   bool get _ready => _esimConfirmed && _unlockedConfirmed;
+
+  Future<void> _applyReferral() async {
+    final code = _refCtrl.text.trim().toUpperCase();
+    if (code.isEmpty) return;
+    setState(() { _refBusy = true; _refError = null; });
+    try {
+      final discount = await widget.api.validateReferral(code);
+      setState(() {
+        if (discount == null) {
+          _refError = 'That code was not recognized — check it and try again.';
+          _appliedCode = null; _discountCents = 0;
+        } else {
+          _appliedCode = code; _discountCents = discount;
+        }
+      });
+    } catch (_) {
+      setState(() => _refError = 'Could not check that code — try again.');
+    } finally {
+      setState(() => _refBusy = false);
+    }
+  }
 
   Future<void> _createOrder() async {
     setState(() { _busy = true; _error = null; });
@@ -35,6 +61,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         planId: widget.plan.planId,
         destination: widget.plan.destination,
         idempotencyKey: 'order-${DateTime.now().microsecondsSinceEpoch}',
+        referralCode: _appliedCode,
       );
       setState(() => _result = r);
     } catch (e) {
@@ -100,6 +127,43 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               style: Theme.of(context).textTheme.bodySmall)),
           ]),
           const Divider(height: 32),
+          // "Give $5" — friend's code applies a server-validated discount.
+          Row(children: [
+            Expanded(child: TextField(
+              controller: _refCtrl,
+              enabled: _appliedCode == null && _result == null,
+              textCapitalization: TextCapitalization.characters,
+              decoration: const InputDecoration(
+                labelText: 'Referral code (optional)',
+                hintText: 'PICO-XXXXXXXX',
+                isDense: true,
+                border: OutlineInputBorder(),
+              ),
+              onSubmitted: (_) => _applyReferral(),
+            )),
+            const SizedBox(width: 8),
+            if (_appliedCode == null)
+              FilledButton.tonal(
+                style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
+                onPressed: _refBusy || _result != null ? null : _applyReferral,
+                child: Text(_refBusy ? '…' : 'Apply'),
+              )
+            else
+              TextButton(
+                onPressed: _result == null ? () => setState(() {
+                  _appliedCode = null; _discountCents = 0; _refCtrl.clear();
+                }) : null,
+                child: const Text('Remove'),
+              ),
+          ]),
+          if (_appliedCode != null) Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text('Code $_appliedCode applied — your friend earns credit when your payment clears.',
+                style: const TextStyle(color: PicoColors.green, fontSize: 13))),
+          if (_refError != null) Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(_refError!, style: const TextStyle(color: Colors.red, fontSize: 13))),
+          const Divider(height: 32),
           Text('Order summary', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           Card(child: Padding(
@@ -107,7 +171,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               _line(context, plan.name, plan.price),
               _line(context, 'Taxes & fees', '\$0.00'),
-              _line(context, 'Total today', plan.price, bold: true),
+              if (_discountCents > 0)
+                _line(context, 'Referral credit',
+                    '-\$${(_discountCents / 100).toStringAsFixed(2)}'),
+              _line(context, 'Total today',
+                  '\$${((plan.priceCents - _discountCents) / 100).toStringAsFixed(2)} ${plan.currency}',
+                  bold: true),
               const SizedBox(height: 8),
               Text('One-time purchase — no future charges, no subscription.\n'
                   'Activate within ${plan.activationDeadlineDays} days. '
@@ -282,8 +351,10 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
                   ]),
                 )),
                 const SizedBox(height: 8),
-                FilledButton(onPressed: widget.onDone,
-                    child: const Text('View in My Plans')),
+                FilledButton(onPressed: () {
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                  widget.onDone();
+                }, child: const Text('View in My Plans')),
               ],
               if (o.status == 'needs_review')
                 const Card(child: Padding(

@@ -25,8 +25,9 @@ export function makeFixture(): Fixture {
 }
 
 /** Create an order through the real API path. */
-export async function createOrder(fx: Fixture, planId = 'mock-fr-everyday', idemKey?: string) {
-  const r = request(fx.app).post('/api/v1/orders').send({ planId, destination: 'FR' });
+export async function createOrder(fx: Fixture, planId = 'mock-fr-everyday', idemKey?: string,
+    extra?: Record<string, unknown>) {
+  const r = request(fx.app).post('/api/v1/orders').send({ planId, destination: 'FR', ...extra });
   if (idemKey) r.set('idempotency-key', idemKey);
   const res = await r;
   if (res.status !== 201 && res.status !== 200) throw new Error(`order create failed: ${JSON.stringify(res.body)}`);

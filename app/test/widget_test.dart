@@ -37,6 +37,12 @@ ApiClient fakeApi() {
             'cancellation': '', 'products': []},
       }, 201);
     }
+    if (path == '/api/v1/orders/ord-1/referral') {
+      return _json({'code': 'PICO-ABCD1234', 'creditCents': 500, 'redemptionCount': 1});
+    }
+    if (path == '/api/v1/referrals/validate') {
+      return _json({'valid': true, 'discountCents': 500});
+    }
     if (path.startsWith('/api/v1/orders/')) {
       return _json({'order': _orderJson('ord-1', 'provisioned')});
     }
@@ -111,6 +117,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('France Trip'), findsOneWidget);
     expect(find.textContaining('not available yet'), findsOneWidget);
+    // Referral card shows the owned code and earned credit (Give $5 — Get $5).
+    expect(find.text('Give \$5 — Get \$5'), findsOneWidget);
+    expect(find.text('PICO-ABCD1234'), findsOneWidget);
+    expect(find.textContaining('Credit balance: \$5.00'), findsOneWidget);
   });
 
   testWidgets('Help: I can\'t connect flow is reachable', (tester) async {

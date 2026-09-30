@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../api.dart';
 import '../order_store.dart';
 import '../theme.dart';
+import 'checkout.dart';
 
 /// My Plans (spec §9, §19.C): adapts to actual purchases, shows ONE prominent
 /// next action, and states honestly when allowance/status is unavailable.
@@ -55,14 +57,97 @@ class MyPlansTabState extends State<MyPlansTab> {
                   Text('Pick a destination in Travel to see plans for your trip.',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodyMedium),
+                  const SizedBox(height: 12),
+                  Text('After your first plan is paid, you get a code to share:\n'
+                      'friends save \$5, you earn \$5 credit.',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall),
                 ]));
               }
+              final paid = orders.where((o) =>
+                  ['provisioning', 'provisioned', 'needs_review'].contains(o.status));
               return ListView(children: [
                 const SizedBox(height: 8),
+                if (paid.isNotEmpty)
+                  _ReferralCard(api: widget.api, order: paid.first),
                 for (final o in orders) _OrderCard(api: widget.api, order: o, onChanged: reload),
               ]);
             },
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "Give $5 — Get $5": the customer's code + earned credit. Credit is a real
+/// server ledger balance; in test mode the money movement is simulated.
+class _ReferralCard extends StatelessWidget {
+  final ApiClient api;
+  final Order order;
+  const _ReferralCard({required this.api, required this.order});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: PicoColors.navy,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: FutureBuilder<ReferralInfo>(
+          future: api.getReferral(order.id),
+          builder: (context, snap) {
+            final info = snap.data;
+            return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Give \$5 — Get \$5',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
+              const SizedBox(height: 6),
+              const Text('Friends get \$5 off their first eligible plan. '
+                  'You earn \$5 PICO credit when their payment clears.',
+                  style: TextStyle(color: Colors.white70, fontSize: 13)),
+              const SizedBox(height: 12),
+              if (info == null)
+                const SizedBox(height: 20,
+                    child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
+              else if (info.code == null)
+                const Text('Your code appears once your first plan is paid.',
+                    style: TextStyle(color: Colors.white70, fontSize: 13))
+              else
+                Row(children: [
+                  Expanded(child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(info.code!,
+                        style: const TextStyle(color: Colors.white,
+                            fontWeight: FontWeight.w700, fontSize: 18, letterSpacing: 1.5)),
+                  )),
+                  const SizedBox(width: 8),
+                  FilledButton.tonalIcon(
+                    style: FilledButton.styleFrom(minimumSize: const Size(0, 40)),
+                    icon: const Icon(Icons.copy, size: 16),
+                    label: const Text('Copy'),
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: info.code!));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Code copied — send it to a friend.')));
+                    },
+                  ),
+                ]),
+              if (info != null && info.code != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  'Credit balance: \$${(info.creditCents / 100).toStringAsFixed(2)}'
+                  '${info.redemptionCount > 0 ? ' (${info.redemptionCount} friend${info.redemptionCount == 1 ? '' : 's'} joined)' : ''}'
+                  ' — applies to future PICO purchases.',
+                  style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                const SizedBox(height: 4),
+                const Text('TEST MODE: credit is tracked on the server; money movement is simulated.',
+                    style: TextStyle(color: Colors.white54, fontSize: 11)),
+              ],
+            ]);
+          },
         ),
       ),
     );
@@ -102,16 +187,25 @@ class _OrderCard extends StatelessWidget {
           ]),
           Text(order.destination, style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 8),
-          // ONE prominent next action (spec §19.C).
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: PicoColors.blue.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(10),
+          // ONE prominent next action (spec §19.C) — opens live order status.
+          InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: () => Navigator.push(context, MaterialPageRoute(
+              builder: (_) => OrderStatusScreen(api: api, orderId: order.id,
+                  onDone: onChanged))),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: PicoColors.blue.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(children: [
+                Expanded(child: Text(_headline,
+                    style: const TextStyle(color: PicoColors.blue, fontWeight: FontWeight.w700))),
+                const Icon(Icons.chevron_right, color: PicoColors.blue),
+              ]),
             ),
-            child: Text(_headline,
-                style: const TextStyle(color: PicoColors.blue, fontWeight: FontWeight.w700)),
           ),
           const SizedBox(height: 10),
           // Honest availability (spec §9): usage data needs the supplier usage

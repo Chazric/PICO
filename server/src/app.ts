@@ -6,6 +6,7 @@ import type { BillingAdapter } from './billing.js';
 import type { SupplierAdapter } from './supplier/types.js';
 import { Provisioner } from './provisioning.js';
 import { config } from './config.js';
+import * as referrals from './referrals.js';
 
 export interface Deps {
   db: DB;
@@ -17,7 +18,8 @@ export interface Deps {
 const CreateOrder = z.object({
   planId: z.string().min(1),
   destination: z.string().min(2),
-  planName: z.string().max(60).optional(),
+  planName: z.string().max(60).nullish(),
+  referralCode: z.string().max(20).nullish(),
 });
 
 export function createApp(deps: Deps): Express {
@@ -131,16 +133,40 @@ export function createApp(deps: Deps): Express {
 
     const orderId = uid();
     const taxCents = 0; // Tax jurisdiction handling is deferred (spec §16).
+
+    // Referral "Give $5": validate BEFORE charging — bad code rejects the
+    // order rather than silently skipping the friend's discount.
+    let discountCents = 0;
+    let appliedCode: string | null = null;
+    if (body.data.referralCode) {
+      const code = body.data.referralCode.trim().toUpperCase();
+      if (!referrals.lookupCode(db, code)) {
+        res.status(400).json({ error: 'referral code not found — check it and try again' });
+        return;
+      }
+      if (plan.priceCents <= config.referral.discountCents) {
+        res.status(400).json({ error: 'this plan is not eligible for referral credit' });
+        return;
+      }
+      discountCents = config.referral.discountCents;
+      appliedCode = code;
+    }
+    const totalCents = plan.priceCents + taxCents - discountCents;
+
     const pi = await billing.createPaymentIntent({
-      amountCents: plan.priceCents + taxCents,
+      amountCents: totalCents,
       currency: plan.currency,
       orderId,
     });
 
-    db.prepare(
-      `INSERT INTO orders (id, plan_id, destination, amount_cents, currency, tax_cents, status, payment_intent_id, plan_name, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'created', ?, ?, ?, ?)`,
-    ).run(orderId, plan.planId, plan.destination, plan.priceCents, plan.currency, taxCents, pi.paymentIntentId, body.data.planName ?? null, now(), now());
+    db.transaction(() => {
+      db.prepare(
+        `INSERT INTO orders (id, plan_id, destination, amount_cents, currency, tax_cents, status, payment_intent_id, plan_name, referral_code, discount_cents, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'created', ?, ?, ?, ?, ?, ?)`,
+      ).run(orderId, plan.planId, plan.destination, plan.priceCents, plan.currency, taxCents,
+        pi.paymentIntentId, body.data.planName ?? null, appliedCode, discountCents, now(), now());
+      if (appliedCode) referrals.redeem(db, orderId, appliedCode, plan.priceCents);
+    })();
     if (idemKey) {
       db.prepare(`INSERT INTO idempotency_keys (key, endpoint, resource_id, created_at) VALUES (?, 'create_order', ?, ?)`)
         .run(idemKey, orderId, now());
@@ -157,7 +183,10 @@ export function createApp(deps: Deps): Express {
       },
       orderSummary: {
         products: [{ name: plan.name, planId: plan.planId }],
-        totalCents: plan.priceCents + taxCents,
+        subtotalCents: plan.priceCents + taxCents,
+        discountCents,
+        referralCode: appliedCode,
+        totalCents,
         taxCents,
         currency: plan.currency,
         futureCharges: 'none — one-time purchase',
@@ -172,6 +201,29 @@ export function createApp(deps: Deps): Express {
     const order = getOrder(db, req.params.id);
     if (!order) { res.status(404).json({ error: 'order not found' }); return; }
     res.json({ order });
+  });
+
+  // Referrals — "Give $5, Get $5": check a code before checkout.
+  app.post('/api/v1/referrals/validate', (req, res) => {
+    const code = z.string().min(3).max(20).safeParse(req.body?.code);
+    if (!code.success) { res.status(400).json({ error: 'code required' }); return; }
+    const row = referrals.lookupCode(db, code.data);
+    res.json(row
+      ? { valid: true, discountCents: config.referral.discountCents }
+      : { valid: false });
+  });
+
+  // The customer's own code + earned credit. Code is issued lazily once the
+  // order is paid — a code never exists before a verified payment.
+  app.get('/api/v1/orders/:id/referral', (req, res) => {
+    const order = db.prepare(`SELECT id FROM orders WHERE id=?`).get(req.params.id);
+    if (!order) { res.status(404).json({ error: 'order not found' }); return; }
+    const codeRow = referrals.ensureCode(db, req.params.id);
+    res.json({
+      code: codeRow?.code ?? null,
+      creditCents: referrals.creditBalance(db, req.params.id),
+      redemptionCount: referrals.redemptionCount(db, req.params.id),
+    });
   });
 
   // Rename a purchased profile ("France Trip", "Business" — spec §19.B).
@@ -254,6 +306,9 @@ async function handleStripeEvent(
       provisioner.enqueue(orderId, `prov-${orderId}`);
       await provisioner.processOrder(orderId);
     }
+    // Referral credit posts only on verified payment — same trust boundary as
+    // fulfillment. Safe on replays: the ledger unique key dedupes.
+    referrals.creditReferrer(db, orderId);
     // If status didn't move (already provisioned / refunded / canceled), the event
     // is a duplicate or out-of-order — durable record kept, no re-fulfillment.
   } else if (ev.type === 'payment_intent.payment_failed') {
@@ -263,6 +318,9 @@ async function handleStripeEvent(
   } else if (ev.type === 'charge.refunded' || ev.type === 'payment_intent.canceled') {
     db.prepare(`UPDATE orders SET status=?, updated_at=? WHERE id=?`)
       .run(ev.type === 'charge.refunded' ? 'refunded' : 'canceled', now(), orderId);
+    // Revoke the referral: redemption voids and any posted credit is reversed
+    // by a negative ledger entry (append-only, idempotent).
+    referrals.voidRedemption(db, orderId);
   }
 }
 

@@ -22,6 +22,10 @@ export const config = {
   },
   supplierAdapter: req('SUPPLIER_ADAPTER', 'mock'),
   sessionSecret: req('SESSION_SECRET', 'dev-only-insecure-session-secret'),
+  referral: {
+    // "Give $5 — Get $5": friend saves this much, referrer earns this much.
+    discountCents: Number(req('REFERRAL_DISCOUNT_CENTS', '500')),
+  },
 } as const;
 
 if (config.stripe.live && config.env !== 'production') {

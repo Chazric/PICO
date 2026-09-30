@@ -97,6 +97,19 @@ class Order {
         provisioning = j['provisioning'] as Map<String, dynamic>?;
 }
 
+class ReferralInfo {
+  final String? code;          // null until the owning order is paid
+  final int creditCents;
+  final int redemptionCount;
+  const ReferralInfo({this.code, required this.creditCents, required this.redemptionCount});
+
+  factory ReferralInfo.fromJson(Map<String, dynamic> j) => ReferralInfo(
+    code: j['code'] as String?,
+    creditCents: (j['creditCents'] as num?)?.toInt() ?? 0,
+    redemptionCount: (j['redemptionCount'] as num?)?.toInt() ?? 0,
+  );
+}
+
 class CreateOrderResult {
   final Order order;
   final PaymentInfo payment;
@@ -133,6 +146,7 @@ class ApiClient {
     required String destination,
     String? planName,
     String? idempotencyKey,
+    String? referralCode,
   }) async {
     final r = await _http.post(
       Uri.parse('$base/api/v1/orders'),
@@ -140,7 +154,12 @@ class ApiClient {
         'content-type': 'application/json',
         if (idempotencyKey != null) 'idempotency-key': idempotencyKey,
       },
-      body: jsonEncode({'planId': planId, 'destination': destination, 'planName': planName}),
+      body: jsonEncode({
+        'planId': planId,
+        'destination': destination,
+        if (planName != null) 'planName': planName,
+        if (referralCode != null) 'referralCode': referralCode,
+      }),
     );
     if (r.statusCode != 201 && r.statusCode != 200) {
       throw Exception('order failed: ${r.body}');
@@ -154,6 +173,22 @@ class ApiClient {
   Future<void> renameOrder(String id, String name) async {
     await _http.post(Uri.parse('$base/api/v1/orders/$id/name'),
         headers: {'content-type': 'application/json'}, body: jsonEncode({'planName': name}));
+  }
+
+  /// Referral "Give $5, Get $5" — check a friend's code before checkout.
+  Future<int?> validateReferral(String code) async {
+    final r = await _http.post(Uri.parse('$base/api/v1/referrals/validate'),
+        headers: {'content-type': 'application/json'}, body: jsonEncode({'code': code}));
+    if (r.statusCode != 200) throw Exception('validate failed: ${r.body}');
+    final body = jsonDecode(r.body);
+    return body['valid'] == true ? (body['discountCents'] as num).toInt() : null;
+  }
+
+  /// The customer's own referral code + earned credit (issued once an order is paid).
+  Future<ReferralInfo> getReferral(String orderId) async {
+    final r = await _http.get(Uri.parse('$base/api/v1/orders/$orderId/referral'));
+    if (r.statusCode != 200) throw Exception('referral failed: ${r.body}');
+    return ReferralInfo.fromJson(jsonDecode(r.body));
   }
 
   /// Dev/test only — drives a signed payment event through the backend's real
