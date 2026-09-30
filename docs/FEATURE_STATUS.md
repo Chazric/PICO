@@ -32,6 +32,11 @@ keys/capabilities) · **Deferred** (later sprint per spec §17).
 | Emergency-calling disclosure | Implemented | Data-only plans state they cannot place calls incl. emergency calls |
 | Lifecycle transition log (immutable) | Implemented + Tested | `order_events` + `transitionOrder()` — V2 §7; see docs/ESIM_LIFECYCLE.md |
 | Structured compliance-review records | Implemented | `ComplianceReviewRecord` — V2 §1's 8 documented fields on every gate |
+| Feature flags / regulatory kill switches | Implemented + Tested | `feature_flags` + `/admin/flags` — no app update needed (V2 §§18,59) |
+| Pricing margin floor | Implemented + Tested | `costCents` + `PICO_MIN_MARGIN_PCT` — discounts can't sell below floor (V2 §44) |
+| Referral abuse cap | Implemented | `REFERRAL_MAX_CREDIT_CENTS` lifetime cap (V2 §46) |
+| Admin compliance view | Implemented | `GET /admin/compliance`, token-gated (V2 §19) |
+| Secret scanning in CI | Implemented | gitleaks job (V2 §§30,61) |
 | Offline receipts/instruction caching | Deferred | Sprint 3 |
 | CURRENT CONNECTION dashboard (V2 §3) | Deferred | Sprint 3 — needs supplier usage/carrier reporting; My Plans is the seed |
 | "Find My Plan" recommendation engine (V2 §4) | Deferred | Sprint 3 — needs real catalog breadth first |
@@ -49,7 +54,7 @@ keys/capabilities) · **Deferred** (later sprint per spec §17).
 
 ## Test results (Sprint 1)
 
-- Backend: **22/22 vitest** — catalog disclosure completeness, server pricing,
+- Backend: **27/27 vitest** — catalog disclosure completeness, server pricing,
   destination/plan mismatch, idempotent order creation, unsigned/rejected
   webhooks, duplicate delivery (1 eSIM), failed payment (no provisioning),
   unknown-payment events stored, out-of-order refund-then-success, supplier
@@ -57,7 +62,8 @@ keys/capabilities) · **Deferred** (later sprint per spec §17).
   issuance/validation/discount, credit-only-on-verified-payment, double-credit
   prevention, bad-code rejection, refund reversal, compliance gating
   (unauthorized service rejected, unknown market → review, catalog statuses),
-  immutable lifecycle transition log.
+  immutable lifecycle transition log, kill-switch order blocking (market +
+  supplier), admin auth, margin-floor referral rejection.
 - App: **4/4 widget tests** — three tabs, browse→plans→detail flow with
   disclosure + mock labeling, My Plans honesty + referral card, Help "I can't connect".
 
@@ -72,3 +78,5 @@ keys/capabilities) · **Deferred** (later sprint per spec §17).
 2. `flutter_stripe` platform setup (iOS `Stripe.podspec`, Android `PaymentConfiguration` + theme).
 3. A real supplier contract + adapter implementing `server/src/supplier/types.ts`.
 4. App signing/toolchain (Xcode, Play Console) — outside this environment.
+5. GitHub-side hardening once the repo exists (V2 §31): protected main, PR
+   reviews, Dependabot, secret scanning — CI workflow already in-repo.

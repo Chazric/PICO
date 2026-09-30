@@ -1,0 +1,1245 @@
+ecommunications carrier, MVNO, numbering provider, payment institution, or other regulated
+entity unless the company has actually obtained the required authorization.
+The architecture must allow Pico to expand later toward Pico-branded connectivity and
+potentially an MVNO model without requiring a complete rewrite.
+
+1. ABSOLUTE DEVELOPMENT RULE
+DO NOT GUESS ABOUT REGULATED FEATURES.
+Whenever development involves:
+ telecommunications
+ telephone numbers
+ voice
+ SMS
+ eSIM
+ KYC
+ identity verification
+ payments
+ taxes
+ emergency services
+ privacy
+ sanctions
+ consumer protection
+ country-specific regulations
+ numbering rules
+ carrier requirements
+the system must not invent requirements or assume that a feature is legal worldwide.
+If a requirement is unknown:
+STOP THAT SPECIFIC REGULATED FEATURE.
+Create:
+COMPLIANCE_REVIEW_REQUIRED
+and document:
+1. Jurisdiction
+2. Feature
+
+3. Provider
+4. Regulatory question
+5. Information required
+6. Technical options
+7. Known risks
+8. Required professional/provider confirmation
+The questionable feature must remain disabled until verified.
+
+2. PRODUCT VISION
+Pico should become:
+The travel connectivity operating system.
+The customer should not have to understand cellular technology.
+The core experience should be:
+Tell Pico where you’re going.
+Pico determines:
+ compatible connectivity
+ appropriate plan
+ available providers
+ data requirements
+ eSIM compatibility
+ activation requirements
+ voice/SMS availability
+ country restrictions
+ KYC requirements
+ network limitations
+ pricing
+ expiration
+ troubleshooting
+Pico should feel dramatically simpler than a traditional telecom application.
+
+3. CORE USER EXPERIENCE
+
+The primary dashboard should immediately display:
+CURRENT CONNECTION
+Country
+Carrier/network
+Connection type
+Data remaining
+Expiration
+Connection quality
+Example:
+���� FRANCE
+12.4 GB remaining
+4G LTE
+Orange
+Expires Oct. 18
+Connection status:
+CONNECTED
+Primary actions:
+ DATA
+ PHONE
+ MESSAGES
+ TRIP
+ SUPPORT
+
+4. “FIND MY PLAN”
+Create a highly simplified recommendation engine.
+Ask:
+Where are you going?
+
+Single country or multi-country itinerary.
+How long?
+Trip duration.
+How much data do you expect to use?
+ Light
+ Moderate
+ Heavy
+Need a phone number?
+Yes / No
+Need hotspot?
+Yes / No
+Need voice/SMS?
+Yes / No
+Then display:
+YOUR PICO RECOMMENDATION
+Destination
+Data
+Duration
+Network/provider
+Voice/SMS availability
+Hotspot availability
+Price
+Important restrictions
+Never claim “best” unless the criteria and data support the statement.
+
+5. TRIP MODE
+Create:
+
+MY TRIP
+Allow the user to enter:
+Paris → Bordeaux → Barcelona → Rome
+Pico displays connectivity requirements by destination.
+Example:
+���� France
+✓ Data
+✓ eSIM
+✓ Available provider
+���� Spain
+✓ Data
+✓ eSIM
+���� Italy
+✓ Data
+⚠ Additional plan required
+Provide:
+ trip itinerary
+ connectivity status
+ plan expiration
+ destination compatibility
+ recommended actions
+ activation reminders
+
+6. ESIM COMPATIBILITY ENGINE
+Before purchase, check where technically possible:
+ device model
+ eSIM capability
+ carrier lock status where available
+ supported countries
+ supported networks
+
+ 4G/5G availability
+ hotspot compatibility
+ voice/SMS capability
+ provider restrictions
+ activation method
+Never tell a customer an eSIM will work unless supported by verified provider/device
+information.
+
+7. ESIM LIFECYCLE
+Create a formal state machine:
+CREATED
+→ PAYMENT_PENDING
+→ PAYMENT_CONFIRMED
+→ COMPLIANCE_CHECK
+→ PROVISIONING
+→ ESIM_READY
+→ INSTALLATION_STARTED
+→ ACTIVE
+→ EXPIRING
+→ EXPIRED
+Error states:
+PAYMENT_FAILED
+PROVISIONING_FAILED
+INSTALLATION_FAILED
+COMPLIANCE_FAILED
+REFUND_PENDING
+
+REFUNDED
+SUSPENDED
+Every state transition must be logged.
+
+8. ESIM ACTIVATION
+Support, where technically and contractually permitted:
+ native eSIM installation
+ QR activation
+ manual activation code
+ SM-DP+ information
+ installation instructions
+ activation status
+ data-line selection guidance
+ data roaming guidance
+ APN troubleshooting where applicable
+ activation diagnostics
+Do not assume iOS or Android permits every provisioning method.
+Use native platform capabilities where required.
+
+9. PROVIDER-AGNOSTIC
+ARCHITECTURE
+Never hard-code Pico to a single eSIM supplier.
+Create a provider abstraction layer:
+ConnectivityProvider
+Support multiple providers behind a common interface.
+Each provider must support appropriate capabilities such as:
+ plans
+ pricing
+
+ coverage
+ eSIM provisioning
+ activation
+ data balance
+ top-up
+ voice
+ SMS
+ numbers
+ refunds
+ status
+ cancellation
+The system must be capable of adding/removing providers without rewriting the customer-facing
+application.
+
+10. PROVIDER ROUTING ENGINE
+Create a provider selection system using verified data such as:
+ coverage
+ availability
+ price
+ provider reliability
+ activation speed
+ destination
+ data amount
+ voice/SMS capability
+ hotspot capability
+ customer eligibility
+ provider restrictions
+Never claim that Pico provides the lowest price unless current comparable pricing has actually
+been verified.
+
+11. PROVIDER FAILOVER
+If a provider fails during provisioning:
+Provider A
+
+↓
+Provider unavailable
+↓
+Check transaction lock
+↓
+Determine whether provisioning actually occurred
+↓
+Only if safe:
+Provider B
+Never accidentally create:
+ duplicate eSIMs
+ duplicate phone numbers
+ duplicate charges
+ duplicate refunds
+
+12. TRANSACTION IDEMPOTENCY
+Every financial and provisioning operation must use idempotency.
+Required for:
+ Stripe payments
+ webhooks
+ eSIM provisioning
+ phone-number provisioning
+ top-ups
+ refunds
+ provider API calls
+Duplicate webhook delivery must NEVER create duplicate customer assets or duplicate charges.
+
+13. TELEPHONE NUMBER SYSTEM
+If Pico offers telephone numbers, numbers may ONLY come from authorized
+telecommunications providers.
+Pico must never allow:
+ arbitrary caller-ID selection
+ unauthorized caller-ID spoofing
+ impersonation
+ selection of another person’s number
+ unauthorized number presentation
+Each number must have:
+ provider
+ country
+ number type
+ customer/account owner
+ assignment date
+ authorization status
+ applicable restrictions
+ service capabilities
+ compliance requirements
+
+14. COUNTRY COMPLIANCE ENGINE
+Create country/service matrices.
+Each service must have a status:
+APPROVED
+APPROVED_WITH_CONDITIONS
+REQUIRES_VERIFICATION
+NOT_AVAILABLE
+LEGAL_REVIEW_REQUIRED
+Track:
+
+ numbering requirements
+ KYC
+ business verification
+ address requirements
+ local-presence requirements
+ voice restrictions
+ SMS restrictions
+ caller-ID rules
+ emergency calling
+ data protection
+ consumer requirements
+ tax requirements
+ sanctions restrictions
+ provider restrictions
+Never assume one country’s rules apply to another.
+
+15. BUSINESS NUMBER PROTECTION
+If a customer wants a number for business use, determine whether the relevant provider/country
+requires:
+ identity verification
+ business verification
+ address
+ company registration
+ local presence
+ additional documentation
+Do not claim that possessing a foreign number creates a legal business presence in that country.
+
+16. ACCEPTABLE USE
+Create and enforce Pico’s Acceptable Use Policy.
+Prohibit:
+ fraud
+ phishing
+ identity theft
+
+ impersonation
+ illegal telemarketing
+ spam
+ prohibited robocalling
+ threats
+ harassment
+ extortion
+ money laundering
+ sanctions violations
+ illegal gambling
+ malware
+ account takeover
+ caller-ID spoofing
+ telecommunications abuse
+ unlawful activity
+Provide a reporting mechanism.
+
+17. FRAUD ENGINE
+Create a risk engine monitoring:
+ excessive calling
+ excessive SMS
+ unusual purchasing
+ multiple accounts
+ payment anomalies
+ geographic anomalies
+ rapid number acquisition
+ suspicious destinations
+ repeated verification failures
+ chargebacks
+ provider abuse reports
+ account takeover
+ unusual provisioning behavior
+Use:
+LOW_RISK
+MEDIUM_RISK
+HIGH_RISK
+
+BLOCKED
+Risk scores are operational fraud controls and must not be presented as legal conclusions.
+
+18. REGULATORY KILL SWITCH
+Every regulated service must have an independent feature/country/provider kill switch.
+Examples:
+FRANCE_VOICE_ENABLED
+FRANCE_SMS_ENABLED
+US_NUMBERS_ENABLED
+BUSINESS_NUMBERS_ENABLED
+PROVIDER_A_ENABLED
+If a service needs to be suspended, disable only that service/provider/country where possible.
+Do not require an app-store update to disable a regulated feature.
+
+19. COMPLIANCE ADMIN CENTER
+Create:
+PICO COMPLIANCE CENTER
+Display:
+Countries
+ service status
+ requirements
+ last review
+ reviewer
+ provider
+
+Services
+ Data
+ eSIM
+ Voice
+ SMS
+ Numbers
+Providers
+ contract status
+ approved countries
+ approved services
+ restrictions
+Legal Reviews
+ open
+ pending
+ approved
+ rejected
+
+20. AI CONNECTIVITY CONCIERGE
+Create:
+PICO AI
+Users can ask:
+“I’m going to France for 12 days. What should I buy?”
+“My internet isn’t working.”
+“How much data do I have?”
+“Why isn’t my eSIM connecting?”
+“Do I need another plan for Italy?”
+AI may use verified Pico data.
+
+AI must NEVER:
+ override compliance
+ override KYC
+ override fraud controls
+ create unauthorized numbers
+ bypass provider restrictions
+ advise users how to circumvent regulations
+ determine legal eligibility independently
+ disable security controls
+AI must escalate uncertain regulated questions.
+
+21. DATA GUARDIAN
+Monitor:
+ data consumption
+ estimated remaining data
+ expiration
+ unusual consumption
+ projected depletion
+Notify:
+“At your current usage rate, your plan may run out in approximately X days.”
+Allow:
+ top-up
+ plan change
+ usage details
+ alerts
+Do not automatically charge the customer without explicit authorization.
+
+22. NETWORK MONITORING
+Where platform/provider capabilities permit, display:
+
+ network
+ connection type
+ approximate connection quality
+ speed tests
+ latency
+ outages
+ connection history
+Never claim Pico can control cellular networks when it cannot.
+
+23. MULTI-NETWORK FAILOVER
+Implement only technically supported connectivity failover.
+Do NOT claim true simultaneous cellular bonding unless the device, operating system, carrier
+and provider actually support it.
+Create a:
+Connectivity Abstraction Layer
+that can support:
+ network switching
+ provider failover
+ supported multi-network technologies
+where technically available.
+
+24. ZERO-DATA EXPERIENCE
+Design Pico to support cached/offline functionality.
+When connectivity is unavailable, users should still be able to access locally cached:
+ purchased plan information
+ activation instructions
+ account information needed for recovery
+ support instructions
+ emergency information
+
+Carrier-sponsored or zero-rated access may only be used where an actual carrier/provider
+arrangement exists.
+Never assume Pico can independently whitelist itself on arbitrary carrier networks.
+
+25. LOST/STOLEN DEVICE MODE
+Allow customers to:
+ secure account
+ revoke sessions
+ suspend services
+ protect phone numbers
+ view active eSIMs
+ sign out other devices
+ contact support
+Require appropriate authentication.
+
+26. PAYMENTS
+Use Stripe or another appropriate payment processor.
+Support:
+ Apple Pay
+ Google Pay
+ cards
+ localized currencies where supported
+ refunds
+ subscriptions
+ top-ups
+Never store raw card credentials.
+Never place secret payment credentials in the mobile application.
+
+27. PAYMENT FLOW
+Authoritative flow:
+Customer order
+→ Payment
+→ verified provider/payment webhook
+→ compliance check
+→ provider eligibility
+→ provisioning
+→ provider confirmation
+→ Pico transaction confirmation
+→ customer notification
+Never trust a client-side “payment successful” message.
+
+28. WEBHOOK SECURITY
+Every webhook must:
+ verify signature
+ prevent replay
+ validate payload
+ use idempotency
+ maintain transaction state
+ reject malformed requests
+ log processing
+ safely retry failures
+
+29. SECURITY ARCHITECTURE
+
+Use:
+ TLS
+ secure authentication
+ short-lived access tokens
+ secure refresh-token architecture
+ encrypted sensitive data
+ secure secrets management
+ role-based access control
+ least privilege
+ device/session management
+ audit logging
+ rate limiting
+ fraud detection
+ App Attest where supported
+ Google Play Integrity where supported
+Do not represent App Attest or Play Integrity as perfect jailbreak/root detection.
+
+30. ZERO-TRUST SECRET
+MANAGEMENT
+Absolutely prohibit secrets in:
+ Flutter source
+ iOS source
+ Android source
+ GitHub
+ public configuration
+ logs
+ analytics events
+Use:
+.env.local
+.env.test
+.env.staging
+.env.production
+or equivalent secure secret-management systems.
+
+Never commit secrets.
+Add secret scanning to GitHub CI.
+
+31. GITHUB
+On the first development operation:
+1. Create private GitHub repository.
+2. Initialize README.
+3. Establish branch strategy.
+4. Enable protected main branch.
+5. Enable pull-request review.
+6. Enable automated testing.
+7. Enable dependency scanning.
+8. Enable secret scanning where available.
+9. Establish issue templates.
+10. Establish release tagging.
+Never commit production credentials.
+
+32. DEVELOPMENT ENVIRONMENTS
+Create:
+LOCAL
+TEST
+STAGING
+PRODUCTION
+Each environment must have separate:
+ database
+ credentials
+ API keys
+ webhook secrets
+ provider accounts where possible
+ Stripe mode
+
+ logging
+ monitoring
+Never connect development software to production money or production customer data.
+
+33. SANDBOX FIRST
+All integrations must initially use:
+ Stripe Test Mode
+ provider sandbox environments
+ test webhooks
+ test numbers where available
+ test KYC
+ test provisioning
+No production credentials until the corresponding integration has passed automated and manual
+testing.
+
+34. DATABASE
+Use a secure cloud database with:
+ encryption
+ backups
+ point-in-time recovery where available
+ access controls
+ migration system
+ audit logging
+Never store raw identity documents unless specifically required.
+Prefer storing:
+ verification status
+ verification provider ID
+ verification timestamp
+ minimum necessary metadata
+instead of sensitive identity documents.
+
+35. KYC
+Use established KYC providers.
+Identity documents should preferably travel directly to the authorized KYC provider.
+Pico should retain only the minimum information required.
+Immediately clear temporary local identity images after processing where appropriate.
+Do not invent country-specific KYC rules.
+
+36. PRIVACY
+Implement privacy by design.
+For every personal-data field document:
+ purpose
+ legal/business reason
+ storage location
+ access
+ retention
+ deletion
+ provider sharing
+Create:
+ Privacy Policy
+ Data Retention Policy
+ Data Deletion workflow
+ Data Export workflow
+ Account Deletion workflow
+Do not retain unnecessary data.
+
+37. LEGAL ENTITY &amp; INTELLECTUAL
+PROPERTY
+Before production launch, ensure the business has appropriate professional advice regarding:
+ corporate structure
+ IP ownership
+ trademarks
+ contractor agreements
+ developer IP assignment
+ provider contracts
+ customer agreements
+ insurance
+ international operations
+ taxes
+All software developed for Pico must have documented ownership/assignment to the company.
+
+38. TRADEMARK
+Before major advertising expenditure:
+Conduct professional trademark clearance for:
+PICO
+in relevant:
+ software
+ telecommunications
+ travel
+ eSIM
+ technology
+classes and jurisdictions.
+Do not spend heavily on branding until the company has confirmed the name is reasonably
+available for the intended markets.
+
+39. CUSTOMER TERMS
+Prepare professional legal documents covering:
+ Terms of Service
+ Privacy Policy
+ Acceptable Use Policy
+ Refund Policy
+ eSIM terms
+ telecommunications limitations
+ third-party provider terms
+ number assignment
+ suspension
+ account termination
+ fraud
+ service interruptions
+ emergency calling
+ limitation of liability
+ dispute provisions where appropriate
+Never make the documents claim legal protection that has not been verified.
+
+40. CUSTOMER SUPPORT
+Build:
+ help center
+ AI support
+ human escalation
+ ticketing
+ activation troubleshooting
+ payment support
+ refund requests
+ lost-device support
+ number support
+ connectivity troubleshooting
+Every support ticket should have:
+ account
+ transaction
+ provider
+
+ service
+ timestamps
+ status
+ resolution
+
+41. BUSINESS TRAVEL
+Create:
+PICO BUSINESS
+Support:
+ company accounts
+ employee accounts
+ administrator roles
+ centralized billing
+ travel plans
+ expense reports
+ invoices
+ usage reporting
+ data limits
+ employee provisioning
+ account controls
+Enterprise functionality must use proper role-based access.
+
+42. INVOICE/EXPENSE SYSTEM
+Generate itemized invoices containing applicable:
+ customer information
+ company information
+ service
+ destination
+ date
+ price
+ applicable taxes
+ payment status
+ transaction ID
+
+Do not label invoices “tax compliant” in every jurisdiction unless the required tax rules have
+been verified.
+
+43. INTERNATIONALIZATION
+Build internationalization from Day 1.
+Architecture must support:
+ English
+ French
+ Spanish
+ German
+ Italian
+ Portuguese
+ Japanese
+ Simplified Chinese
+ Korean
+ Arabic
+Support:
+ currencies
+ date formats
+ number formats
+ RTL
+ localized legal text
+ localized invoices
+Translations must be externalized from application logic.
+
+44. PRICING ENGINE
+Separate:
+ wholesale cost
+ payment fees
+ taxes
+ currency conversion
+ Pico margin
+
+ promotional discounts
+Prevent plans from accidentally being sold below configured margin thresholds unless explicitly
+authorized.
+Never assume tax treatment.
+
+45. SUBSCRIPTIONS
+Initial pricing architecture should support:
+FREE
+Basic connectivity marketplace.
+PICO PLUS
+Optional premium features.
+PICO PRO
+Advanced travel/business features.
+Subscriptions must not be required to purchase a basic connectivity plan unless the business
+model specifically requires it.
+Do not create subscription charges without explicit customer authorization.
+
+46. REFERRALS
+Build:
+REFER A FRIEND
+Support:
+ referral codes
+ attribution
+ fraud prevention
+ referral credits
+
+ expiration
+ maximum rewards
+ abuse detection
+Never allow users to generate unlimited fraudulent referral credits.
+
+47. MARKETING CLAIMS
+Marketing must never make unsupported claims such as:
+ “Works everywhere”
+ “Never loses service”
+ “100% coverage”
+ “Always cheapest”
+ “Guaranteed 5G”
+ “100% secure”
+ “Impossible to block”
+ “Anonymous”
+ “Untraceable”
+All claims must be backed by current verified information.
+
+48. APP STORE / GOOGLE PLAY
+Prepare the application for:
+ Apple App Store requirements
+ Google Play requirements
+ privacy disclosures
+ permissions
+ payment requirements
+ subscription rules
+ account deletion requirements
+ location disclosures
+ data-safety disclosures
+ user-consent requirements
+Do not attempt to bypass platform rules.
+
+49. IOS
+Use Xcode for:
+ compilation
+ signing
+ provisioning
+ Apple Pay
+ App Attest
+ Live Activities
+ native eSIM functionality where supported
+ native permissions
+ native integrations
+Flutter remains the primary cross-platform application layer.
+Use native Swift modules when platform functionality cannot safely or correctly be implemented
+through Flutter alone.
+
+50. ANDROID
+Use native Kotlin components where required for:
+ Google Pay
+ Play Integrity
+ connectivity capabilities
+ eSIM/device functionality
+ permissions
+ widgets
+ platform-specific functionality
+Flutter remains the primary cross-platform layer.
+
+51. LIVE ACTIVITIES / WIDGETS
+Support, where technically available:
+iOS Live Activity
+
+Data remaining
+Expiration
+Connection status
+Android Widget
+Data remaining
+Expiration
+Connection status
+Do not display sensitive information on lock screens without considering privacy.
+
+52. OFFLINE-FIRST
+Use local caching such as Isar/Hive or an appropriate current Flutter storage solution.
+Cache only necessary information.
+Encrypt sensitive local information.
+Support offline viewing of purchased plan details and troubleshooting.
+
+53. OBSERVABILITY
+Implement:
+ structured logs
+ crash reporting
+ performance monitoring
+ distributed tracing
+ uptime monitoring
+ webhook monitoring
+ provisioning monitoring
+ provider health
+ payment health
+ database health
+ API latency
+ alerting
+Create:
+
+PICO SYSTEM HEALTH
+Stripe
+Provider A
+Provider B
+Database
+API
+KYC
+Authentication
+Each should show operational status.
+
+54. INCIDENT RESPONSE
+Create a documented process:
+Detect
+→ Contain
+→ Investigate
+→ Preserve evidence
+→ Notify appropriate parties
+→ Correct
+→ Test
+→ Document
+→ Prevent recurrence
+Create an emergency service kill switch.
+
+55. BACKUPS &amp; DISASTER RECOVERY
+Implement:
+
+ automated backups
+ encrypted backups
+ recovery testing
+ database restoration procedures
+ disaster-recovery documentation
+ provider outage procedures
+Define recovery objectives appropriate to the service.
+
+56. INSURANCE
+Before significant production expansion, provide a checklist for professional review of:
+ cyber liability
+ technology errors &amp; omissions
+ general liability
+ business interruption
+ appropriate corporate insurance
+Do not represent insurance as a substitute for compliance.
+
+57. ADMIN DASHBOARD
+Build:
+DASHBOARD
+Revenue
+Orders
+Customers
+Active eSIMs
+Active numbers
+Provisioning
+Refunds
+Fraud
+Providers
+Countries
+Support
+System health
+
+COMPLIANCE
+Country rules
+Service status
+Provider requirements
+Open legal reviews
+FINANCE
+Payments
+Refunds
+Margins
+Provider costs
+Payouts
+SECURITY
+Sessions
+Risk
+Fraud
+Security alerts
+Audit logs
+
+58. AUDIT LOG
+Securely record:
+ account creation
+ login/security events
+ KYC
+ number assignment
+ eSIM provisioning
+ payments
+ refunds
+ suspension
+ reactivation
+ provider changes
+ administrative actions
+ compliance actions
+ fraud decisions
+Audit logs must be protected from unauthorized modification.
+
+59. FEATURE FLAGS
+Create feature flags for:
+AI_CONCIERGE
+TRIP_MODE
+LIVE_ACTIVITY
+VOICE_NUMBERS
+SMS
+AUTO_TOP_UP
+KYC
+BUSINESS_MODE
+NETWORK_MONITORING
+PROVIDER_FAILOVER
+COUNTRY_SERVICES
+SUPPLIER_A
+SUPPLIER_B
+Every regulated feature should be independently controllable.
+
+60. TESTING
+Create automated tests for:
+ payment
+ duplicate webhooks
+ provisioning
+ provider failure
+ provider failover
+ refunds
+ KYC
+ fraud
+ country restrictions
+
+ number assignment
+ account deletion
+ privacy
+ authentication
+ rate limiting
+ subscription cancellation
+ offline mode
+Create end-to-end tests:
+Browse → Purchase → Webhook → Compliance → Provision → Activation → Usage →
+Expiration
+
+61. SECURITY TESTING
+Before production:
+ dependency scanning
+ secret scanning
+ SAST
+ DAST where appropriate
+ penetration testing
+ API security testing
+ authentication testing
+ authorization testing
+ webhook replay testing
+ rate-limit testing
+ fraud testing
+ mobile binary security review
+Do not launch regulated services solely because automated tests pass.
+
+62. DEVELOPMENT PHASES
+SPRINT 0 — FOUNDATION
+ GitHub
+ architecture
+ environments
+ CI/CD
+
+ secrets
+ database
+ logging
+ testing
+ documentation
+SPRINT 1 — TRANSACTIONAL CORE
+Browse plan
+→ Stripe Test Mode
+→ secure backend
+→ webhook
+→ transaction record
+→ simulated provider provisioning
+→ confirmation
+SPRINT 2 — REAL ESIM
+Provider integration
+→ eligibility
+→ provisioning
+→ activation
+→ balance
+→ expiration
+SPRINT 3 — TRAVEL INTELLIGENCE
+Trip Mode
+AI concierge
+plan recommendation
+Data Guardian
+
+network monitoring
+SPRINT 4 — COMMUNICATIONS
+Voice
+SMS
+numbers
+WhatsApp guidance
+Only where legally/provider supported.
+SPRINT 5 — SECURITY
+App Attest
+Play Integrity
+fraud
+KYC
+device security
+SPRINT 6 — BUSINESS
+Business accounts
+employees
+billing
+invoices
+expense reports
+admin
+SPRINT 7 — GLOBAL
+Countries
+
+languages
+currencies
+provider expansion
+country compliance
+SPRINT 8 — PRODUCTION
+Load testing
+security testing
+legal review
+provider approval
+App Store
+Google Play
+production launch
+
+63. REQUIRED DOCUMENTATION
+Create and continuously maintain:
+/docs/ARCHITECTURE.md
+/docs/SECURITY.md
+/docs/PRIVACY.md
+/docs/DATA-FLOW.md
+/docs/API-CONTRACT.md
+/docs/DATABASE-SCHEMA.md
+/docs/ESIM-PROVISIONING.md
+/docs/PAYMENT-FLOW.md
+
+/docs/KYC-FLOW.md
+/docs/TELECOM-COMPLIANCE.md
+/docs/COUNTRY-RULES.md
+/docs/PROVIDER-INTEGRATION.md
+/docs/FRAUD-PREVENTION.md
+/docs/DISASTER-RECOVERY.md
+/docs/INCIDENT-RESPONSE.md
+/docs/APPLE-COMPLIANCE.md
+/docs/ANDROID-COMPLIANCE.md
+/docs/THREAT-MODEL.md
+/docs/LEGAL-REVIEW-REGISTER.md
+Update these documents whenever architecture changes.
+
+64. COST CONTROL
+Do not build expensive infrastructure before validating demand.
+Use staged development.
+First prove:
+Customer → Purchase → Provision → Connect
+Then add advanced features.
+Avoid unnecessary infrastructure duplication.
+Choose one primary production backend architecture rather than simultaneously implementing
+multiple cloud architectures.
+Use abstraction layers where future migration is realistically valuable.
+
+65. FUTURE MVNO ARCHITECTURE
+Design Pico so it can eventually support:
+Pico App
+↓
+Connectivity Marketplace
+↓
+Multi-provider Platform
+↓
+Pico-branded connectivity
+↓
+Potential MVNO
+But do NOT implement MVNO functionality merely because it is technically possible.
+An MVNO expansion must become a separate project involving:
+ carrier agreements
+ numbering
+ regulatory requirements
+ telecom infrastructure
+ commercial commitments
+ billing
+ customer support
+ legal review
+ compliance
+ working capital
+
+66. PRODUCT PRINCIPLE
+Pico must not attempt to beat traditional telecom companies by pretending to be one
+immediately.
+
+Pico’s initial competitive advantage should be:
+simplicity + intelligence + multi-provider connectivity + excellent eSIM experience + travel
+utility.
+The customer should think:
+“I don’t need to understand telecom. Pico handles it.”
+
+67. FINAL SAFETY REQUIREMENT
+No disclaimer, contract, software architecture, insurance policy, or automated control can
+guarantee that Pico will never be sued or investigated.
+The engineering objective is to:
+ operate through authorized providers
+ follow applicable requirements
+ minimize unnecessary data
+ prevent fraud
+ prevent unauthorized caller ID
+ maintain evidence
+ respond to abuse
+ provide transparent customer terms
+ use professional legal review for regulated services
+ disable uncertain services rather than guessing
+
+68. START NOW
+Immediately perform the following in order:
+1. Initialize the private GitHub repository.
+2. Create the branch strategy.
+3. Create the project architecture.
+4. Create secure environment configuration.
+5. Create local/test/staging/production separation.
+6. Create the database schema.
+7. Create provider abstraction interfaces.
+8. Create Stripe Test Mode integration.
+9. Create transaction state machine.
+
+10. Create secure webhook architecture.
+11. Create simulated eSIM provider.
+12. Create automated tests.
+13. Create documentation.
+14. Build Sprint 1 only.
+15. Do NOT proceed to regulated production functionality until Sprint 1 passes all tests.
+At the completion of each sprint:
+ run tests
+ review security
+ review architecture
+ update documentation
+ commit to GitHub
+ produce a concise implementation report
+ identify unresolved risks
+ do not silently make assumptions
+Do not skip steps. Do not fabricate provider capabilities. Do not fabricate legal
+requirements. Do not put secrets in client code. Do not implement questionable regulated
+functionality without verification.
+Build Pico as a secure, compliant, provider-independent, international connectivity
+platform that can scale from an eSIM travel application into a much larger telecom
+business if the appropriate commercial and regulatory requirements are later satisfied.

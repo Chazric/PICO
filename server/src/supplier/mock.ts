@@ -44,6 +44,7 @@ function plan(
     renewal: { renewable: false, detail: 'One-time purchase; top-up available after activation.' },
     sharedAcrossCountries: covered.length > 1,
     priceCents: cents,
+    costCents: Math.round(cents * 0.55), // simulated wholesale (labeled mock)
     currency: 'USD',
   };
 }

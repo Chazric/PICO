@@ -1,90 +1,66 @@
-# PICO — MASTER DEVELOPMENT PROMPT V2 (received; truncated at §13)
+# V2 spec → implementation map
 
-Global Travel Connectivity, eSIM, Telecom & Travel Utility Platform.
-Lead-engineering directive: telecom-grade, security-first, compliance-first,
-globally scalable travel connectivity platform. Business model: connect
-travelers with authorized eSIM/data/voice/SMS providers — PICO is NOT a
-carrier, MVNO, numbering provider, or payment institution unless actually
-authorized. Architecture must allow later expansion toward PICO-branded
-connectivity / MVNO without a rewrite.
+Full verbatim spec: `docs/SPEC_V2.txt` (68 sections).
 
-## §1 Absolute development rule — DO NOT GUESS ABOUT REGULATED FEATURES
-Telecom, numbers, voice, SMS, eSIM, KYC, payments, taxes, emergency services,
-privacy, sanctions, consumer protection, country regulations, numbering rules,
-carrier requirements: never invent requirements or assume global legality.
-Unknown → STOP that specific regulated feature, create
-COMPLIANCE_REVIEW_REQUIRED documenting: jurisdiction, feature, provider,
-regulatory question, information required, technical options, known risks,
-required professional/provider confirmation. Feature stays disabled until
-verified.
-**Implemented**: `ComplianceReviewRecord`/`buildReviewRecord` in
-`server/src/compliance/statuses.ts`; emitted on every compliance gate.
+## Implemented in Sprint 1 code
 
-## §2 Product vision — the travel connectivity operating system
-Tell PICO where you're going → PICO determines connectivity, plan, providers,
-data needs, compatibility, activation, voice/SMS, restrictions, KYC, limits,
-pricing, expiration, troubleshooting. Dramatically simpler than telecom apps.
+| § | Item | Where |
+|---|---|---|
+| 1 | COMPLIANCE_REVIEW_REQUIRED + 8-field record | `server/src/compliance/statuses.ts` → `buildReviewRecord`, stored in `admin_events` |
+| 7 | Lifecycle state machine + logged transitions | `order_events` + `transitionOrder()`; mapping in `ESIM_LIFECYCLE.md` |
+| 9 | Provider-agnostic `ConnectivityProvider` | `server/src/supplier/types.ts` `SupplierAdapter` |
+| 11 | Failover safety (reconcile before retry) | `Provisioner.processOrder` — `lookupProvision` by idempotency key |
+| 12 | Idempotency everywhere | `idempotency_keys` + UNIQUE constraints + dedupe |
+| 14 | Country compliance engine (5 statuses) | `compliance/statuses.ts` + catalog/order gates |
+| 16 | Acceptable Use Policy | `docs/legal/AUP.md` (draft) |
+| 17 | Risk levels LOW/MEDIUM/HIGH/BLOCKED | `RiskLevel` in `statuses.ts` |
+| 18 | Regulatory kill switch (no app update) | `server/src/flags.ts` + `POST /admin/flags/:key` + `PICO_FLAG_*` env |
+| 19 | Compliance admin center (API) | `GET /admin/compliance` — markets, provider record, open reviews |
+| 26/27 | Stripe flow, never trust client | implemented + tested (webhook-verified only) |
+| 28 | Webhook security | signature + durable receipt + dedupe + retry-safe |
+| 30 | Zero-trust secrets | server-only `.env`, CI secret scan, nothing in app/logs |
+| 44 | Pricing engine margin floor | `costCents` on plans + `PICO_MIN_MARGIN_PCT` order-time check |
+| 46 | Referral system + abuse caps | `referrals.ts` + `REFERRAL_MAX_CREDIT_CENTS` |
+| 59 | Feature flags | `feature_flags` table, seeded per §59 + per-market `ESIM_*` |
+| 63 | Required docs | see `DOCS_INDEX.md` |
 
-## §3 Core UX — CURRENT CONNECTION dashboard
-Country, carrier/network, connection type, data remaining, expiration, quality;
-actions DATA / PHONE / MESSAGES / TRIP / SUPPORT.
-**Roadmap** — needs supplier usage APIs (Sprint 3); My Plans is the seed.
+## Roadmap (deferred, per V2 §62 phase plan)
 
-## §4 "Find My Plan" — recommendation engine
-Questions: destination(s), duration, data use (light/moderate/heavy), phone
-number?, hotspot?, voice/SMS? → recommendation card with restrictions.
-Never claim "best" without supporting criteria/data. **Roadmap (Sprint 3)**.
-
-## §5 Trip Mode — MY TRIP itinerary
-Paris → Bordeaux → Barcelona → Rome: per-destination connectivity status,
-expirations, recommended actions, activation reminders. **Roadmap (Sprint 3,
-overlaps original spec §19.A).**
-
-## §6 eSIM compatibility engine
-Pre-purchase checks: device model, eSIM capability, carrier lock where
-available, supported countries/networks, 4G/5G, hotspot, voice/SMS, provider
-restrictions, activation method. Never promise compatibility without verified
-data. **Partially implemented** — honest confirmation flow Sprint 1; device-side
-detection is Sprint 2 platform work.
-
-## §7 eSIM lifecycle — formal state machine
-CREATED → PAYMENT_PENDING → PAYMENT_CONFIRMED → COMPLIANCE_CHECK →
-PROVISIONING → ESIM_READY → INSTALLATION_STARTED → ACTIVE → EXPIRING → EXPIRED
-+ error states (PAYMENT_FAILED, PROVISIONING_FAILED, INSTALLATION_FAILED,
-COMPLIANCE_FAILED, REFUND_PENDING, REFUNDED, SUSPENDED).
-Every transition logged. **Implemented** — see docs/ESIM_LIFECYCLE.md for the
-state mapping; `order_events` is the immutable transition log.
-
-## §8 eSIM activation
-Native install / QR / manual code / SM-DP+ / instructions / status / data-line
-+ roaming guidance / APN / diagnostics — only where platform + contract permit.
-**Roadmap (Sprint 2)** — activation code already stored server-side.
-
-## §9 Provider-agnostic architecture — ConnectivityProvider abstraction
-plans/pricing/coverage/provisioning/activation/balance/top-up/voice/SMS/
-numbers/refunds/status/cancellation behind a common interface; add/remove
-providers without rewriting the app. **Implemented** —
-`server/src/supplier/types.ts` `SupplierAdapter`; mock is one implementation.
-
-## §10 Provider routing engine
-Select provider on verified data: coverage, availability, price, reliability,
-activation speed, destination, data, voice/SMS, hotspot, eligibility,
-restrictions. Never claim lowest price unverified. **Roadmap (Sprint 2+,
-activates with second provider).**
-
-## §11 Provider failover
-Provider A fails → check transaction lock → determine whether provisioning
-actually occurred → only if safe, Provider B. Never duplicate eSIMs, numbers,
-charges, or refunds. **Partially implemented** — timeout reconciliation via
-idempotency-key lookup already prevents duplicates; cross-provider failover
-needs ≥2 providers.
-
-## §12 Transaction idempotency
-Stripe payments, webhooks, eSIM/number provisioning, top-ups, refunds, provider
-calls — all idempotent. Duplicate webhooks never duplicate assets or charges.
-**Implemented + tested.**
-
-## §13+ Telephone number system … — MESSAGE TRUNCATED HERE
-(the paste ended mid-sentence at "numbers may ONLY come fro…"; numbering
-guardrails are already covered by docs/NUMBERING_COMPLIANCE.md and the
-compliance engine's `phone_number`/`caller_id` service types)
+| § | Item | Sprint |
+|---|---|---|
+| 3 | CURRENT CONNECTION dashboard | 3 (needs supplier usage data) |
+| 4 | Find My Plan engine | 3 |
+| 5 | Trip Mode | 3 |
+| 6 | Device-side compatibility checks | 2 (platform APIs) |
+| 8 | Native/QR/SM-DP+ activation UX | 2 |
+| 10 | Provider routing engine | 2+ (needs ≥2 providers) |
+| 13 | Telephone number system | 4 — guardrails: `NUMBERING_COMPLIANCE.md` |
+| 15 | Business number protection | 4 |
+| 20 | AI concierge | 3+ (rules first, never overrides compliance) |
+| 21 | Data Guardian | 3 (needs usage reporting) |
+| 22/23 | Network monitoring / multi-network failover | 3+ (capability-gated, honest claims) |
+| 24/52 | Zero-data / offline-first | 3 |
+| 25 | Lost/stolen device mode | with auth/accounts |
+| 29 | Auth, RBAC, App Attest, Play Integrity | 5 |
+| 31 | GitHub hardening (protected main, reviews, Dependabot) | on repo creation |
+| 32/33 | Env separation, sandbox-first | enforced via `.env.*` + config guards |
+| 34 | Cloud DB, encryption, PITR | production infra decision |
+| 35 | KYC providers | 4/5 |
+| 36 | Privacy program (retention, deletion, export) | `PRIVACY.md` scaffolded |
+| 37/38 | Legal entity, trademark clearance | pre-launch business work — see `LEGAL_REVIEW_REGISTER.md` |
+| 39 | Customer terms (professional docs) | `docs/legal/` drafts → counsel |
+| 40 | Support center (ticketing, escalation) | 3+ |
+| 41/42 | Business accounts + invoicing | 6 |
+| 43 | i18n (10 languages, RTL) | 7 — strings externalize from day 1 |
+| 45 | Subscriptions (FREE/PLUS/PRO) | 6+ — never required for basic plans |
+| 47 | Marketing-claims discipline | enforced in all copy — ongoing |
+| 48–51 | Store compliance, iOS/Android native, widgets | platform sprints |
+| 53/54 | Observability, incident response | `INCIDENT_RESPONSE.md` scaffolded |
+| 55 | Backups/DR | `DISASTER_RECOVERY.md` scaffolded |
+| 56 | Insurance review | pre-launch business work |
+| 57 | Admin dashboard (UI) | 6 — API surface started |
+| 58 | Audit log | `order_events` + `admin_events` + `webhook_events` live |
+| 60/61 | Test + security-testing program | vitest suite + gitleaks in CI; pen-test pre-launch |
+| 64 | Cost control — staged build | honored: mock-first, abstraction layers only where migration is plausible |
+| 65 | MVNO path | design allows it; explicitly a separate future project |
+| 66/67 | Product principles | embodied in honest-claims + compliance-first architecture |

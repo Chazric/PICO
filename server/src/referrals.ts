@@ -71,6 +71,9 @@ export function creditReferrer(db: DB, redeemerOrderId: string) {
   db.prepare(
     `UPDATE referral_redemptions SET status='credited', credited_at=? WHERE redeemer_order_id=?`,
   ).run(now(), redeemerOrderId);
+  // Abuse cap (V2 §46): lifetime referral credit per customer is capped —
+  // the friend's discount is unaffected; the referrer simply can't earn more.
+  if (creditBalance(db, r.owner_order_id) >= config.referral.maxCreditCents) return;
   // Idempotent ledger post: UNIQUE(owner, reason, ref) makes replays no-ops.
   db.prepare(
     `INSERT INTO credit_ledger (id, owner_order_id, cents, reason, ref_order_id, created_at)

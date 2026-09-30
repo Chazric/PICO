@@ -7,6 +7,7 @@ import type { SupplierAdapter } from './supplier/types.js';
 import { Provisioner } from './provisioning.js';
 import { config } from './config.js';
 import * as referrals from './referrals.js';
+import * as flags from './flags.js';
 import { evaluateService, buildReviewRecord, MOCK_PROVIDER, MOCK_COUNTRY_RULES } from './compliance/statuses.js';
 
 export interface Deps {
@@ -26,6 +27,17 @@ const CreateOrder = z.object({
 export function createApp(deps: Deps): Express {
   const app = express();
   const { db, billing, supplier, provisioner } = deps;
+
+  // Regulatory kill switches (V2 §§18, 59) — seeded once, live in the DB.
+  flags.seedFlags(db, supplier.listDestinations().map(d => d.code), supplier.name);
+
+  // Ops endpoints are token-gated even in test mode (V2 §29 least privilege).
+  const adminAuth = (req: Request, res: Response, next: () => void) => {
+    if (req.header('x-admin-token') !== config.admin.token) {
+      res.status(401).json({ error: 'admin token required' }); return;
+    }
+    next();
+  };
 
   // Dev-friendly CORS — tighten to known origins before production.
   app.use((req, res, next) => {
@@ -102,7 +114,8 @@ export function createApp(deps: Deps): Express {
   app.get('/api/v1/catalog/destinations', (_req, res) => {
     const destinations = supplier.listDestinations()
       .map((d) => ({ ...d, compliance: complianceFor(d.code) }))
-      .filter((d) => d.compliance.status !== 'NOT_AVAILABLE');
+      .filter((d) => d.compliance.status !== 'NOT_AVAILABLE'
+        && flags.isEnabled(db, flags.flagKey('esim', d.code)));
     res.json({ destinations, supplier: supplier.name });
   });
 
@@ -151,6 +164,13 @@ export function createApp(deps: Deps): Express {
     // Compliance gate at purchase time (master spec §1/§4): never sell into a
     // market the provider hasn't authorized, never auto-provision when unsure.
     const decision = complianceFor(plan.destination);
+    // Regulatory kill switch (V2 §18): a disabled service/market/provider is
+    // not sellable, whatever the compliance evaluation says.
+    if (!flags.isEnabled(db, flags.flagKey('esim', plan.destination))
+        || !flags.isEnabled(db, flags.flagKey('supplier', supplier.name))) {
+      res.status(409).json({ error: 'this service is currently unavailable in that market' });
+      return;
+    }
     if (decision.status === 'NOT_AVAILABLE') {
       res.status(409).json({ error: 'this plan is not available in that market', compliance: decision });
       return;
@@ -179,14 +199,19 @@ export function createApp(deps: Deps): Express {
         res.status(400).json({ error: 'referral code not found — check it and try again' });
         return;
       }
-      if (plan.priceCents <= config.referral.discountCents) {
-        res.status(400).json({ error: 'this plan is not eligible for referral credit' });
-        return;
-      }
       discountCents = config.referral.discountCents;
       appliedCode = code;
     }
     const totalCents = plan.priceCents + taxCents - discountCents;
+
+    // Margin floor (V2 §44): a discounted sale may never drop below wholesale
+    // cost × (1 + floor). The eligibility error is phrased for the referral
+    // path, which is the only way the total can dip.
+    const marginFloor = Math.ceil(plan.costCents * (1 + config.pricing.minMarginPct));
+    if (totalCents < marginFloor) {
+      res.status(400).json({ error: 'this plan is not eligible for referral credit' });
+      return;
+    }
 
     const pi = await billing.createPaymentIntent({
       amountCents: totalCents,
@@ -261,6 +286,38 @@ export function createApp(deps: Deps): Express {
       creditCents: referrals.creditBalance(db, req.params.id),
       redemptionCount: referrals.redemptionCount(db, req.params.id),
     });
+  });
+
+  /* ---------- Admin / ops (V2 §§18-19): token-gated ---------- */
+
+  app.get('/api/v1/admin/flags', adminAuth, (_req, res) => {
+    res.json({ flags: flags.listFlags(db) });
+  });
+
+  // Regulatory kill switch: set any flag without redeploying.
+  app.post('/api/v1/admin/flags/:key', adminAuth, (req, res) => {
+    const body = z.object({
+      enabled: z.boolean(),
+      reason: z.string().max(200).nullish(),
+    }).safeParse(req.body);
+    if (!body.success) { res.status(400).json({ error: 'enabled (boolean) required' }); return; }
+    flags.setFlag(db, req.params.key, body.data.enabled, body.data.reason ?? null, 'admin');
+    res.json({ key: req.params.key, enabled: body.data.enabled });
+  });
+
+  // Compliance admin view (V2 §19): per-market statuses, provider record,
+  // and open legal/compliance reviews in one read.
+  app.get('/api/v1/admin/compliance', adminAuth, (_req, res) => {
+    const countries = supplier.listDestinations().map(d => ({
+      code: d.code, name: d.name,
+      compliance: complianceFor(d.code),
+      serviceEnabled: flags.isEnabled(db, flags.flagKey('esim', d.code)),
+    }));
+    const openReviews = db.prepare(
+      `SELECT id, action, order_id, detail, created_at FROM admin_events
+       WHERE action IN ('compliance_review','compliance_hold') ORDER BY created_at`,
+    ).all();
+    res.json({ countries, provider: MOCK_PROVIDER, openReviews });
   });
 
   // Rename a purchased profile ("France Trip", "Business" — spec §19.B).

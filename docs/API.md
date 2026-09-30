@@ -82,6 +82,20 @@ would deliver — used by tests to exercise the real verification path.
 runs it through the real verify → durable → fulfill pipeline. This is the
 mock-mode stand-in for Stripe's webhook delivery used by the app's test checkout.
 
+## Admin / ops (V2 §§18–19) — `x-admin-token` header required, all environments
+
+`GET /admin/flags` → all feature flags `{key, enabled, reason, updated_by, updated_at}`.
+
+`POST /admin/flags/:key` `{enabled, reason?}` → set a kill switch. Per-market
+keys are `ESIM_<CODE>_ENABLED`, per-provider `SUPPLIER_<NAME>_ENABLED`, plus the
+§59 feature flags. Every change is audit-logged (`flag_change` admin event).
+Server-side env override: `PICO_FLAG_<KEY>=off` outranks the DB.
+
+`GET /admin/compliance` → `{countries: [{code, name, compliance, serviceEnabled}],
+provider, openReviews}` — the compliance admin view: market statuses, the
+provider compliance record, and open `compliance_review`/`compliance_hold`
+records (each is a structured `ComplianceReviewRecord` per V2 §1).
+
 ## Health
 
 `GET /health` → `{ok, billingMode: 'stripe'|'mock', supplier: 'mock'|...}`

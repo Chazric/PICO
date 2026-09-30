@@ -28,6 +28,8 @@ export interface PlanDisclosure {
   renewal: { renewable: boolean; detail: string };
   sharedAcrossCountries: boolean;
   priceCents: number;
+  /** Wholesale cost (V2 §44 pricing engine) — margin floor is checked against it. */
+  costCents: number;
   currency: string;
 }
 
