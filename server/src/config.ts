@@ -21,6 +21,13 @@ export const config = {
     live: stripeSecret.startsWith('sk_live_'),
   },
   supplierAdapter: req('SUPPLIER_ADAPTER', 'mock'),
+  esimAccess: {
+    accessCode: process.env.ESIMACCESS_ACCESS_CODE ?? '',
+    secretKey: process.env.ESIMACCESS_SECRET_KEY ?? '',
+    // No sandbox exists: real orders debit the eSIM Access balance.
+    ordersEnabled: process.env.ESIMACCESS_ORDERS_ENABLED === 'true',
+    markup: Number(req('ESIMACCESS_MARKUP', '2')),
+  },
   sessionSecret: req('SESSION_SECRET', 'dev-only-insecure-session-secret'),
   referral: {
     // "Give $5 — Get $5": friend saves this much, referrer earns this much.
@@ -49,4 +56,9 @@ if (config.env === 'production' && !config.admin.token) {
 if (config.stripe.live && config.env !== 'production') {
   // Sprint 1 guardrail: never run live keys outside production.
   throw new Error('Live Stripe key detected outside production — refusing to start.');
+}
+
+if (config.supplierAdapter === 'esimaccess'
+    && (!config.esimAccess.accessCode || !config.esimAccess.secretKey)) {
+  throw new Error('SUPPLIER_ADAPTER=esimaccess needs ESIMACCESS_ACCESS_CODE and ESIMACCESS_SECRET_KEY.');
 }
