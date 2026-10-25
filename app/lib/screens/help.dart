@@ -1,10 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../api.dart';
 import '../theme.dart';
 
 /// Help tab (spec §10, §19.E): visible "I can't connect" flow with guided
 /// checks; detection limits are stated, never faked. Optional diagnostics are
 /// customer-triggered only.
+const kSupportEmail = 'redreishilife+pico@gmail.com';
+
+/// Hosted Privacy Policy / Terms / Support pages. Override with --dart-define=LEGAL_BASE=...
+const kLegalBase = String.fromEnvironment('LEGAL_BASE',
+    defaultValue: 'https://pico-legal.onrender.com');
+
+Future<void> _open(BuildContext context, Uri uri) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  if (!ok) {
+    messenger.showSnackBar(SnackBar(content: Text(uri.scheme == 'mailto'
+        ? 'No email app found. Write to $kSupportEmail'
+        : 'Could not open ${uri.toString()}')));
+  }
+}
+
 class HelpTab extends StatelessWidget {
   final ApiClient api;
   const HelpTab({super.key, required this.api});
@@ -36,9 +53,24 @@ class HelpTab extends StatelessWidget {
           Card(child: ListTile(
             leading: const Icon(Icons.support_agent, size: 28, color: PicoColors.blue),
             title: const Text('Contact support'),
-            subtitle: const Text('Email support@pico.example — replies within 1 business day'),
-            onTap: () {},
+            subtitle: const Text('Email $kSupportEmail — replies within 1 business day'),
+            onTap: () => _open(context, Uri(scheme: 'mailto', path: kSupportEmail,
+                query: 'subject=PICO%20support')),
           )),
+          const SizedBox(height: 8),
+          Text('Help & legal', style: Theme.of(context).textTheme.titleMedium),
+          for (final link in const [
+            ('Support & FAQ', 'support.html', Icons.menu_book_outlined),
+            ('Privacy Policy', 'privacy.html', Icons.privacy_tip_outlined),
+            ('Terms of Service', 'terms.html', Icons.description_outlined),
+          ])
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(link.$3, color: PicoColors.blue),
+              title: Text(link.$1),
+              trailing: const Icon(Icons.open_in_new, size: 18),
+              onTap: () => _open(context, Uri.parse('$kLegalBase/${link.$2}')),
+            ),
           const SizedBox(height: 8),
           Text('Support hours: we are a small team and reply within one business day. '
               'Diagnostic details are only shared with your permission and never '

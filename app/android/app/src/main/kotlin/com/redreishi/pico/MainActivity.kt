@@ -1,4 +1,4 @@
-package ai.pico.pico_app
+package com.redreishi.pico
 
 import io.flutter.embedding.android.FlutterFragmentActivity
 
