@@ -38,7 +38,10 @@ class _HomeShellState extends State<HomeShell> {
   int _tab = 0;
   final _plansKey = GlobalKey<MyPlansTabState>();
 
-  void goToMyPlans() => setState(() => _tab = 1);
+  void goToMyPlans() {
+    setState(() => _tab = 1);
+    _plansKey.currentState?.reload();
+  }
 
   @override
   Widget build(BuildContext context) {
