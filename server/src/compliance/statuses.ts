@@ -152,7 +152,23 @@ export const MOCK_COUNTRY_RULES: Record<string, CountryRulePack> = {
     localPresenceRequired: false, smsAvailable: false, voiceAvailable: false,
     emergencyCalling: 'unavailable', callerIdRestrictions: 'n/a', portability: false,
     notes: 'regional data-only eSIM covering 38 European countries' },
+  EU35: { country: 'EU35', kycRequired: false, businessRegistrationRequired: false,
+    localPresenceRequired: false, smsAvailable: false, voiceAvailable: false,
+    emergencyCalling: 'unavailable', callerIdRestrictions: 'n/a', portability: false,
+    notes: 'regional data-only eSIM covering 35 European countries (eSIM Access EU-35)' },
 };
+
+export const ESIMACCESS_PROVIDER: ProviderComplianceRecord = {
+  ...MOCK_PROVIDER,
+  providerLegalEntity: 'eSIM Access (reseller API account, RED REISHI LLC)',
+  contractStatus: 'active',
+  countriesAuthorized: ['FR', 'JP', 'US', 'EU35'],
+  geographicRestrictions: 'data-only travel eSIMs for the curated destinations',
+};
+
+export function providerFor(supplierName: string): ProviderComplianceRecord {
+  return supplierName === 'esimaccess' ? ESIMACCESS_PROVIDER : MOCK_PROVIDER;
+}
 
 /** Risk levels for fraud/abuse controls (master spec §7, spec §19.D). */
 export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'BLOCKED';

@@ -8,7 +8,7 @@ import { Provisioner } from './provisioning.js';
 import { config } from './config.js';
 import * as referrals from './referrals.js';
 import * as flags from './flags.js';
-import { evaluateService, buildReviewRecord, MOCK_PROVIDER, MOCK_COUNTRY_RULES } from './compliance/statuses.js';
+import { evaluateService, buildReviewRecord, providerFor, MOCK_COUNTRY_RULES } from './compliance/statuses.js';
 
 export interface Deps {
   db: DB;
@@ -27,6 +27,7 @@ const CreateOrder = z.object({
 export function createApp(deps: Deps): Express {
   const app = express();
   const { db, billing, supplier, provisioner } = deps;
+  const provider = providerFor(supplier.name);
 
   // Regulatory kill switches (V2 §§18, 59) — seeded once, live in the DB.
   flags.seedFlags(db, supplier.listDestinations().map(d => d.code), supplier.name);
@@ -109,7 +110,7 @@ export function createApp(deps: Deps): Express {
   // Compliance gate (master spec §1): every destination carries an explicit
   // status evaluated against the provider's authorization — never assumed.
   const complianceFor = (country: string) =>
-    evaluateService(MOCK_PROVIDER, 'esim_data', country, MOCK_COUNTRY_RULES[country]);
+    evaluateService(provider, 'esim_data', country, MOCK_COUNTRY_RULES[country]);
 
   app.get('/api/v1/catalog/destinations', (_req, res) => {
     const destinations = supplier.listDestinations()
@@ -178,7 +179,7 @@ export function createApp(deps: Deps): Express {
     if (decision.requiresReview) {
       // COMPLIANCE_REVIEW_REQUIRED — structured record per V2 spec §1. The
       // feature stays disabled and no charge is created until resolved.
-      const review = buildReviewRecord(MOCK_PROVIDER, 'esim_data', plan.destination, decision);
+      const review = buildReviewRecord(provider, 'esim_data', plan.destination, decision);
       db.prepare(`INSERT INTO admin_events (id, actor, action, order_id, detail, created_at)
         VALUES (?, 'system', 'compliance_review', ?, ?, ?)`).run(uid(), null,
         JSON.stringify({ planId: plan.planId, review }), now());
@@ -317,7 +318,7 @@ export function createApp(deps: Deps): Express {
       `SELECT id, action, order_id, detail, created_at FROM admin_events
        WHERE action IN ('compliance_review','compliance_hold') ORDER BY created_at`,
     ).all();
-    res.json({ countries, provider: MOCK_PROVIDER, openReviews });
+    res.json({ countries, provider: provider, openReviews });
   });
 
   // Rename a purchased profile ("France Trip", "Business" — spec §19.B).
@@ -387,7 +388,8 @@ async function handleStripeEvent(
   deps: Deps,
   ev: { eventId: string; type: string; data: unknown },
 ) {
-  const { db, provisioner } = deps;
+  const { db, provisioner, supplier } = deps;
+  const provider = providerFor(supplier.name);
   const obj = ev.data as { id?: string; metadata?: { pico_order_id?: string } };
   const orderId = obj.metadata?.pico_order_id;
   if (!orderId) return; // not a PICO payment — ignore but keep the event row
@@ -402,10 +404,10 @@ async function handleStripeEvent(
       const order = db.prepare(`SELECT plan_id, destination FROM orders WHERE id=?`)
         .get(orderId) as { plan_id: string; destination: string } | undefined;
       const decision = order
-        ? evaluateService(MOCK_PROVIDER, 'esim_data', order.destination, MOCK_COUNTRY_RULES[order.destination])
+        ? evaluateService(provider, 'esim_data', order.destination, MOCK_COUNTRY_RULES[order.destination])
         : null;
       if (decision?.requiresReview || decision?.status === 'NOT_AVAILABLE') {
-        const review = buildReviewRecord(MOCK_PROVIDER, 'esim_data', order!.destination, decision!);
+        const review = buildReviewRecord(provider, 'esim_data', order!.destination, decision!);
         transitionOrder(db, orderId, 'needs_review',
           { detail: `compliance checkpoint after payment: ${decision!.status}` });
         db.prepare(`INSERT INTO admin_events (id, actor, action, order_id, detail, created_at)

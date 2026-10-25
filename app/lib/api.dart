@@ -9,11 +9,13 @@ class Destination {
   final String name;
   final String kind;
   final List<String> coveredCountries;
-  Destination.fromJson(Map<String, dynamic> j)
+  final String supplier;
+  Destination.fromJson(Map<String, dynamic> j, {this.supplier = 'mock'})
       : code = j['code'],
         name = j['name'],
         kind = j['kind'],
         coveredCountries = (j['coveredCountries'] as List?)?.cast<String>() ?? const [];
+  bool get isMock => supplier == 'mock';
 }
 
 class Plan {
@@ -130,8 +132,9 @@ class ApiClient {
 
   Future<List<Destination>> destinations() async {
     final r = await _http.get(Uri.parse('$base/api/v1/catalog/destinations'));
-    return (jsonDecode(r.body)['destinations'] as List)
-        .map((d) => Destination.fromJson(d)).toList();
+    final body = jsonDecode(r.body);
+    return (body['destinations'] as List)
+        .map((d) => Destination.fromJson(d, supplier: body['supplier'] ?? 'mock')).toList();
   }
 
   Future<List<Plan>> plans(String destination) async {
