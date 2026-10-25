@@ -60,7 +60,8 @@ class _TravelTabState extends State<TravelTab> {
                     return const Center(child: Text('No destinations match your search.'));
                   }
                   return ListView(children: [
-                    const MockBanner('Test catalog — plans shown are simulated, not purchasable.'),
+                    if (dests.first.isMock)
+                      const MockBanner('Test catalog — plans shown are simulated, not purchasable.'),
                     for (final d in dests)
                       Card(
                         child: ListTile(
