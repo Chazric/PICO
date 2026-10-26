@@ -230,15 +230,19 @@ export class EsimAccessSupplier implements SupplierAdapter {
 
   /**
    * Refunds the eSIM price to the balance. eSIM Access only allows this while the
-   * profile is unused and not installed (GOT_RESOURCE / RELEASED); canceling an
-   * already-canceled profile succeeds again.
+   * profile is unused and not installed (GOT_RESOURCE / RELEASED). A profile that
+   * is already canceled (e.g. from the console) is rejected by esim/cancel, so it
+   * is looked up and treated as done.
    */
   async cancel(iccid: string): Promise<void> {
     try {
       await this.call('esim/cancel', { iccid });
     } catch (err) {
-      if (err instanceof EsimAccessError) throw new SupplierCancelRefused(err.message);
-      throw err;
+      if (!(err instanceof EsimAccessError)) throw err;
+      const obj = await this.call<{ esimList?: Array<{ iccid?: string; esimStatus?: string }> }>('esim/query',
+        { orderNo: '', iccid, pager: { pageNum: 1, pageSize: 20 } }).catch(() => null);
+      if (obj?.esimList?.some(p => p.iccid === iccid && p.esimStatus === 'CANCEL')) return;
+      throw new SupplierCancelRefused(err.message);
     }
   }
 
