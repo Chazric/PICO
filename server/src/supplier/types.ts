@@ -49,6 +49,14 @@ export interface SupplierAdapter {
   provision(req: { orderId: string; planId: string; idempotencyKey: string }): Promise<ProvisionResult>;
   /** Reconcile uncertain outcomes: look up a prior provision call by idempotency key. */
   lookupProvision(idempotencyKey: string): Promise<ProvisionResult | null>;
+  /** Cancel an issued, never-installed eSIM so the supplier refunds its cost. Throws SupplierCancelRefused if it can't. */
+  cancel?(iccid: string): Promise<void>;
+  /** Prepaid supplier balance in cents, for suppliers billed from a balance. */
+  balanceCents?(): Promise<number>;
+}
+
+export class SupplierCancelRefused extends Error {
+  constructor(msg = 'supplier refused to cancel the eSIM') { super(msg); this.name = 'SupplierCancelRefused'; }
 }
 
 export class SupplierTimeout extends Error {

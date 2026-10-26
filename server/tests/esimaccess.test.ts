@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { EsimAccessSupplier, retailCents } from '../src/supplier/esimaccess.js';
+import { SupplierCancelRefused } from '../src/supplier/types.js';
 
 const GB = 2 ** 30;
 function pkg(slug: string, price: number, volumeGb: number, location = 'US') {
@@ -14,7 +15,7 @@ const catalog: Record<string, unknown[]> = {
   '!RG': [pkg('EU-35_3_30', 30000, 3, 'FR,DE,IT')],
 };
 
-function fakeApi(opts: { allocateAfter?: number } = {}) {
+function fakeApi(opts: { allocateAfter?: number; cancelFails?: boolean } = {}) {
   const calls: Array<{ path: string; body: any; headers: Record<string, string> }> = [];
   const orders = new Map<string, string>();
   let queries = 0;
@@ -35,6 +36,12 @@ function fakeApi(opts: { allocateAfter?: number } = {}) {
       }
       return ok({ esimList: [{ iccid: '8943000000000000001', orderNo: body.orderNo,
         ac: 'LPA:1$rsp-eu.redteamobile.com$ABC123' }] });
+    }
+    if (path === 'esim/cancel') {
+      if (opts.cancelFails) {
+        return new Response(JSON.stringify({ success: false, errorCode: '310241', errorMsg: 'profile already installed' }));
+      }
+      return ok({});
     }
     return ok({ balance: 500000 });
   }) as unknown as typeof fetch;
@@ -98,5 +105,24 @@ describe('eSIM Access adapter', () => {
     await expect(s.provision({ orderId: 'o1', planId: 'esa-US_3_30', idempotencyKey: 'k' }))
       .rejects.toThrow(/disabled/);
     expect(api.calls.some(c => c.path === 'esim/order')).toBe(false);
+  });
+});
+
+describe('eSIM Access cancel & naming', () => {
+  it('labels the Europe region as excluding France', async () => {
+    const { s } = await make();
+    expect(s.listDestinations().find(d => d.code === 'EU35')?.name).toBe('Europe 35 (excludes France)');
+  });
+
+  it('cancels by ICCID through esim/cancel', async () => {
+    const { s, api } = await make();
+    await s.cancel('8943000000000000001');
+    expect(api.calls.at(-1)).toMatchObject({ path: 'esim/cancel', body: { iccid: '8943000000000000001' } });
+  });
+
+  it('maps a provider refusal to SupplierCancelRefused', async () => {
+    const api = fakeApi({ cancelFails: true });
+    const s = new EsimAccessSupplier({ accessCode: 'ac', secretKey: 'sk', ordersEnabled: false, fetchImpl: api.impl });
+    await expect(s.cancel('89430')).rejects.toBeInstanceOf(SupplierCancelRefused);
   });
 });

@@ -1,6 +1,6 @@
 import { createHash, randomInt } from 'node:crypto';
 import type { Destination, PlanDisclosure, ProvisionResult, SupplierAdapter } from './types.js';
-import { SupplierTimeout } from './types.js';
+import { SupplierCancelRefused, SupplierTimeout } from './types.js';
 
 /**
  * Explicit MOCK supplier adapter (spec §12): clearly labeled simulated results.
@@ -81,6 +81,9 @@ export class MockSupplier implements SupplierAdapter {
   private provisioned = new Map<string, ProvisionResult>();
   /** Test hooks: keys that should hang once (timeout), always fail, etc. */
   private failOnceTimeout = new Set<string>();
+  private refuseCancelIccids = new Set<string>();
+  /** ICCIDs canceled through `cancel` (what a real supplier would refund). */
+  canceled: string[] = [];
 
   listDestinations() { return COUNTRIES; }
   listPlans(destination?: string) {
@@ -106,5 +109,15 @@ export class MockSupplier implements SupplierAdapter {
 
   async lookupProvision(idempotencyKey: string): Promise<ProvisionResult | null> {
     return this.provisioned.get(idempotencyKey) ?? null;
+  }
+
+  /** Test hook — behave as if this eSIM was already installed (supplier won't cancel). */
+  refuseCancel(iccid: string) { this.refuseCancelIccids.add(iccid); }
+
+  async cancel(iccid: string): Promise<void> {
+    if (this.refuseCancelIccids.has(iccid)) {
+      throw new SupplierCancelRefused('mock eSIM already installed — cannot cancel');
+    }
+    this.canceled.push(iccid);
   }
 }

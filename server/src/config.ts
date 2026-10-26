@@ -28,6 +28,15 @@ export const config = {
     ordersEnabled: process.env.ESIMACCESS_ORDERS_ENABLED === 'true',
     markup: Number(req('ESIMACCESS_MARKUP', '2')),
   },
+  alerts: {
+    emailTo: req('ALERT_EMAIL_TO', 'redreishilife+pico@gmail.com'),
+    // Resend (https://resend.com) sends the email; without a key alerts are only logged.
+    resendApiKey: process.env.RESEND_API_KEY ?? '',
+    emailFrom: req('ALERT_EMAIL_FROM', 'PICO Alerts <onboarding@resend.dev>'),
+    lowBalanceCents: Number(req('LOW_BALANCE_ALERT_CENTS', '2000')),
+    checkMinutes: Number(req('LOW_BALANCE_CHECK_MINUTES', '60')),
+    cooldownHours: Number(req('LOW_BALANCE_ALERT_COOLDOWN_HOURS', '24')),
+  },
   sessionSecret: req('SESSION_SECRET', 'dev-only-insecure-session-secret'),
   referral: {
     // "Give $5 — Get $5": friend saves this much, referrer earns this much.

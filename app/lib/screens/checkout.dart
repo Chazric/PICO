@@ -393,6 +393,12 @@ class _OrderStatusScreenState extends State<OrderStatusScreen> {
                   widget.onDone();
                 }, child: const Text('View in My Plans')),
               ],
+              if (o.status == 'refunded' || o.status == 'canceled')
+                const Card(child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('This order was canceled and your payment refunded. '
+                      'Its eSIM no longer works.'),
+                )),
               if (o.status == 'needs_review')
                 const Card(child: Padding(
                   padding: EdgeInsets.all(16),

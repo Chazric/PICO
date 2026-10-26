@@ -1,6 +1,6 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import type { Destination, PlanDisclosure, ProvisionResult, SupplierAdapter } from './types.js';
-import { SupplierTimeout } from './types.js';
+import { SupplierCancelRefused, SupplierTimeout } from './types.js';
 
 /**
  * eSIM Access (https://docs.esimaccess.com) supplier adapter.
@@ -56,7 +56,7 @@ const DESTINATIONS: Array<Destination & { query: string; tiers: Record<Tier, str
     tiers: { light: 'FR_3_30', everyday: 'FR_10_30', heavy: 'FR_20_30' } },
   { code: 'JP', name: 'Japan', kind: 'country', query: 'JP',
     tiers: { light: 'JP_3_30', everyday: 'JP_10_30', heavy: 'JP_20_30' } },
-  { code: 'EU35', name: 'Europe (35 countries)', kind: 'region', query: '!RG',
+  { code: 'EU35', name: 'Europe 35 (excludes France)', kind: 'region', query: '!RG',
     tiers: { light: 'EU-35_3_30', everyday: 'EU-35_10_30', heavy: 'EU-35_20_30' } },
 ];
 
@@ -226,6 +226,20 @@ export class EsimAccessSupplier implements SupplierAdapter {
     if (!pkg) throw new Error(`unknown eSIM Access plan ${req.planId}`);
     const orderNo = await this.placeOrder(req.idempotencyKey, pkg);
     return this.waitForProfile(orderNo);
+  }
+
+  /**
+   * Refunds the eSIM price to the balance. eSIM Access only allows this while the
+   * profile is unused and not installed (GOT_RESOURCE / RELEASED); canceling an
+   * already-canceled profile succeeds again.
+   */
+  async cancel(iccid: string): Promise<void> {
+    try {
+      await this.call('esim/cancel', { iccid });
+    } catch (err) {
+      if (err instanceof EsimAccessError) throw new SupplierCancelRefused(err.message);
+      throw err;
+    }
   }
 
   /** A repeated transactionId returns the original order (eSIM Access dedupes on it). */
