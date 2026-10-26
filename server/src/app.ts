@@ -8,6 +8,7 @@ import { Provisioner } from './provisioning.js';
 import { config } from './config.js';
 import * as referrals from './referrals.js';
 import * as flags from './flags.js';
+import { cancelAndRefund, RefundError } from './refunds.js';
 import { evaluateService, buildReviewRecord, providerFor, MOCK_COUNTRY_RULES } from './compliance/statuses.js';
 
 export interface Deps {
@@ -255,7 +256,7 @@ export function createApp(deps: Deps): Express {
         futureCharges: 'none — one-time purchase',
         renewal: plan.renewal.detail,
         activationDeadlineDays: plan.activationDeadlineDays,
-        cancellation: 'Refundable until the eSIM is installed (mock policy).',
+        cancellation: 'Refundable until the eSIM is installed: contact support from Help.',
       },
     });
   });
@@ -304,6 +305,32 @@ export function createApp(deps: Deps): Express {
     if (!body.success) { res.status(400).json({ error: 'enabled (boolean) required' }); return; }
     flags.setFlag(db, req.params.key, body.data.enabled, body.data.reason ?? null, 'admin');
     res.json({ key: req.params.key, enabled: body.data.enabled });
+  });
+
+  // Cancel & refund: cancels the eSIM at the supplier (refunds our cost) and
+  // fully refunds the customer's payment. Refused once the eSIM is installed.
+  app.post('/api/v1/admin/orders/:id/cancel', adminAuth, async (req, res) => {
+    const reason = z.string().max(200).nullish().safeParse(req.body?.reason);
+    try {
+      const r = await cancelAndRefund(deps, req.params.id,
+        { actor: 'admin', reason: reason.success ? reason.data ?? null : null });
+      res.json({ ...r, order: getOrder(db, req.params.id) });
+    } catch (err) {
+      if (err instanceof RefundError) { res.status(err.status).json({ error: err.message }); return; }
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  app.get('/api/v1/admin/supplier/balance', adminAuth, async (_req, res) => {
+    if (!supplier.balanceCents) {
+      res.status(404).json({ error: `supplier ${supplier.name} has no prepaid balance` }); return;
+    }
+    try {
+      res.json({ supplier: supplier.name, balanceCents: await supplier.balanceCents(),
+        lowBalanceAlertCents: config.alerts.lowBalanceCents });
+    } catch (err) {
+      res.status(502).json({ error: String(err) });
+    }
   });
 
   // Compliance admin view (V2 §19): per-market statuses, provider record,
@@ -427,8 +454,10 @@ async function handleStripeEvent(
     transitionOrder(db, orderId, 'payment_failed',
       { from: ['created'], failureReason: 'payment declined' });
   } else if (ev.type === 'charge.refunded' || ev.type === 'payment_intent.canceled') {
+    // A refund we issued ourselves arrives here too; don't log it twice.
     transitionOrder(db, orderId,
-      ev.type === 'charge.refunded' ? 'refunded' : 'canceled');
+      ev.type === 'charge.refunded' ? 'refunded' : 'canceled',
+      { from: ['created', 'payment_failed', 'paid', 'provisioning', 'provisioned', 'needs_review'] });
     // Revoke the referral: redemption voids and any posted credit is reversed
     // by a negative ledger entry (append-only, idempotent).
     referrals.voidRedemption(db, orderId);

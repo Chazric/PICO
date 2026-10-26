@@ -6,6 +6,7 @@ import { EsimAccessSupplier } from './supplier/esimaccess.js';
 import type { SupplierAdapter } from './supplier/types.js';
 import { Provisioner } from './provisioning.js';
 import { createApp } from './app.js';
+import { checkSupplierBalance, makeMailer } from './alerts.js';
 
 const db = openDb(config.databasePath);
 const billing = makeBilling();
@@ -24,6 +25,17 @@ if (config.supplierAdapter === 'esimaccess') {
 }
 const provisioner = new Provisioner(db, supplier);
 const app = createApp({ db, billing, supplier, provisioner });
+
+if (supplier.balanceCents) {
+  const getBalanceCents = supplier.balanceCents.bind(supplier);
+  const mailer = makeMailer(config.alerts);
+  const checkBalance = () => checkSupplierBalance({
+    db, supplierName: supplier.name, getBalanceCents, mailer, to: config.alerts.emailTo,
+    thresholdCents: config.alerts.lowBalanceCents, cooldownHours: config.alerts.cooldownHours,
+  }).catch(e => console.error('low-balance check failed', e));
+  void checkBalance();
+  setInterval(checkBalance, config.alerts.checkMinutes * 60_000).unref();
+}
 
 app.listen(config.port, () => {
   console.log(`PICO server on :${config.port} (billing=${billing.mode}, supplier=${supplier.name}${config.supplierAdapter === 'esimaccess' ? `, orders=${config.esimAccess.ordersEnabled ? 'ENABLED' : 'disabled'}` : ''})`);

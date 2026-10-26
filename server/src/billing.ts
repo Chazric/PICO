@@ -12,6 +12,8 @@ export interface BillingAdapter {
   mode: 'stripe' | 'mock';
   createPaymentIntent(args: { amountCents: number; currency: string; orderId: string }): Promise<PaymentIntentResult>;
   verifyAndParseWebhook(rawBody: Buffer, signature: string | undefined): { eventId: string; type: string; data: unknown };
+  /** Full refund of an order's payment. Idempotent per order. */
+  refund(args: { paymentIntentId: string; orderId: string }): Promise<{ refundId: string; isMock: boolean }>;
 }
 
 /** Real Stripe adapter — used whenever a sk_test_/sk_live_ secret is configured. */
@@ -40,6 +42,14 @@ export class StripeBilling implements BillingAdapter {
     // constructEvent requires the exact raw body — express.raw must be mounted on this route.
     const ev = this.stripe.webhooks.constructEvent(rawBody, signature, this.webhookSecret);
     return { eventId: ev.id, type: ev.type, data: ev.data.object };
+  }
+
+  async refund(args: { paymentIntentId: string; orderId: string }) {
+    const r = await this.stripe.refunds.create(
+      { payment_intent: args.paymentIntentId, metadata: { pico_order_id: args.orderId } },
+      { idempotencyKey: `refund-${args.orderId}` },
+    );
+    return { refundId: r.id, isMock: false };
   }
 }
 
@@ -80,6 +90,16 @@ export class MockBilling implements BillingAdapter {
     if (!v1s.includes(expected)) throw new Error('webhook signature verification failed');
     const ev = JSON.parse(rawBody.toString('utf8'));
     return { eventId: ev.id, type: ev.type, data: ev.data.object };
+  }
+
+  /** Test hook — make the next refund call fail like a Stripe outage. */
+  failNextRefund = false;
+  refunds: string[] = [];
+
+  async refund(args: { paymentIntentId: string; orderId: string }) {
+    if (this.failNextRefund) { this.failNextRefund = false; throw new Error('mock refund failure'); }
+    this.refunds.push(args.paymentIntentId);
+    return { refundId: `re_mock_${args.orderId.replaceAll('-', '').slice(0, 20)}`, isMock: true };
   }
 
   /** Test/dev helper — build a signed event the verifier will accept. */

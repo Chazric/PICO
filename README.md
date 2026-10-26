@@ -62,3 +62,14 @@ that webhook.
 - Activation codes (SM-DP+) are stored but not displayed yet (credentials handling is Sprint 2).
 
 See `docs/FEATURE_STATUS.md` for the Implemented/Tested/Mocked/Provider-dependent/Deferred labels.
+
+## Operations (admin, token-gated with `x-admin-token: $ADMIN_TOKEN`)
+
+- **Cancel & refund an order:** `POST /api/v1/admin/orders/<orderId>/cancel` with `{"reason":"..."}`.
+  Cancels the eSIM at the supplier (eSIM Access refunds our cost to the balance), fully refunds the
+  Stripe payment and marks the order `refunded`. Refused (409) once the eSIM has been installed or used.
+  Safe to retry if the Stripe refund step fails.
+- **Supplier balance:** `GET /api/v1/admin/supplier/balance`.
+- **Low-balance email:** the server checks the eSIM Access balance every `LOW_BALANCE_CHECK_MINUTES`
+  and emails `ALERT_EMAIL_TO` through Resend (`RESEND_API_KEY`) when it is below
+  `LOW_BALANCE_ALERT_CENTS`, at most once per `LOW_BALANCE_ALERT_COOLDOWN_HOURS`.

@@ -39,8 +39,10 @@ class PlanDetailScreen extends StatelessWidget {
           _row(context, 'Data allowance', plan.dataAllowance),
           _row(context, 'Validity', '${plan.validityDays} days — starts ${plan.validityStarts}'),
           _row(context, 'Coverage', plan.sharedAcrossCountries
-              ? 'Shared allowance across ${plan.coveredDestinations.length} destinations'
+              ? '${plan.dataAllowance} shared across ${plan.coveredDestinations.length} countries'
               : 'Works in ${plan.coveredDestinations.join(', ')}'),
+          if (plan.sharedAcrossCountries)
+            _row(context, 'Countries', ([...plan.coveredDestinations]..sort()).join(', ')),
           _row(context, 'Activate by', 'Within ${plan.activationDeadlineDays} days of purchase'),
           _row(context, 'Calls', plan.calls['detail'] as String),
           _row(context, 'Texts (SMS)', plan.sms['detail'] as String),

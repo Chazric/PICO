@@ -68,7 +68,7 @@ class _TravelTabState extends State<TravelTab> {
                           contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                           title: Text(d.name, style: Theme.of(context).textTheme.titleMedium),
                           subtitle: Text(d.kind == 'region'
-                              ? 'Covers ${d.coveredCountries.length}+ countries'
+                              ? 'Covers ${d.coveredCountries.length} countries'
                               : 'Data plans for ${d.name}'),
                           trailing: const Icon(Icons.chevron_right),
                           onTap: () => Navigator.push(context, MaterialPageRoute(
@@ -116,6 +116,19 @@ class PlansScreen extends StatelessWidget {
               // Spec §5: "What do you need?" — Internet vs Internet + calls/texts.
               // Mock catalog is data-only; say so rather than imply voice exists.
               return ListView(children: [
+                if (destination.kind == 'region' && destination.coveredCountries.isNotEmpty) ...[
+                  Card(child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('Works in these ${destination.coveredCountries.length} countries',
+                          style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: 6),
+                      Text(([...destination.coveredCountries]..sort()).join(', '),
+                          style: Theme.of(context).textTheme.bodyMedium),
+                    ]),
+                  )),
+                  const SizedBox(height: 16),
+                ],
                 Text('What do you need?', style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 6),
                 Text('These plans provide Internet (data) only. Calls and texts use '

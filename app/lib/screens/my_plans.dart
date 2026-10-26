@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../api.dart';
 import '../order_store.dart';
 import '../theme.dart';
 import 'checkout.dart';
+import 'help.dart' show kSupportEmail;
 
 /// My Plans (spec §9, §19.C): adapts to actual purchases, shows ONE prominent
 /// next action, and states honestly when allowance/status is unavailable.
@@ -224,6 +226,14 @@ class _OrderCard extends StatelessWidget {
               icon: const Icon(Icons.edit_outlined, size: 18),
               label: const Text('Rename'),
             ),
+            if (order.status == 'provisioned')
+              TextButton.icon(
+                onPressed: () => launchUrl(Uri(scheme: 'mailto', path: kSupportEmail,
+                    query: 'subject=${Uri.encodeComponent('Refund request: order ${order.id}')}'),
+                    mode: LaunchMode.externalApplication),
+                icon: const Icon(Icons.undo, size: 18),
+                label: const Text('Request refund'),
+              ),
             const Spacer(),
             Text('Order ${order.id.substring(0, order.id.length < 8 ? order.id.length : 8)}',
                 style: Theme.of(context).textTheme.bodySmall),
