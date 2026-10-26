@@ -25,18 +25,10 @@ jobs:
       - run: flutter test
 
   # V2 §§30/61 — secret scanning on every change.
-  
-Red Reishi <redreishilife@gmail.com>
-10:11 PM (4 minutes ago)
-to me
-
-secrets:
-  runs-on: ubuntu-latest
-  steps:
-    - uses: actions/checkout@v4
-    - uses: gitleaks/gitleaks-action@v2
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
       - uses: gitleaks/gitleaks-action@v2
-  env:
-  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
