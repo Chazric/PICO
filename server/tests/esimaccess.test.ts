@@ -15,7 +15,7 @@ const catalog: Record<string, unknown[]> = {
   '!RG': [pkg('EU-35_3_30', 30000, 3, 'FR,DE,IT')],
 };
 
-function fakeApi(opts: { allocateAfter?: number; cancelFails?: boolean } = {}) {
+function fakeApi(opts: { allocateAfter?: number; cancelFails?: boolean; alreadyCanceled?: boolean } = {}) {
   const calls: Array<{ path: string; body: any; headers: Record<string, string> }> = [];
   const orders = new Map<string, string>();
   let queries = 0;
@@ -28,6 +28,9 @@ function fakeApi(opts: { allocateAfter?: number; cancelFails?: boolean } = {}) {
     if (path === 'esim/order') {
       if (!orders.has(body.transactionId)) orders.set(body.transactionId, `B${orders.size + 1}`);
       return ok({ orderNo: orders.get(body.transactionId) });
+    }
+    if (path === 'esim/query' && body.iccid) {
+      return ok({ esimList: [{ iccid: body.iccid, esimStatus: opts.alreadyCanceled ? 'CANCEL' : 'IN_USE' }] });
     }
     if (path === 'esim/query') {
       queries++;
@@ -124,5 +127,12 @@ describe('eSIM Access cancel & naming', () => {
     const api = fakeApi({ cancelFails: true });
     const s = new EsimAccessSupplier({ accessCode: 'ac', secretKey: 'sk', ordersEnabled: false, fetchImpl: api.impl });
     await expect(s.cancel('89430')).rejects.toBeInstanceOf(SupplierCancelRefused);
+  });
+
+  it('treats a profile that is already canceled at eSIM Access as done', async () => {
+    const api = fakeApi({ cancelFails: true, alreadyCanceled: true });
+    const s = new EsimAccessSupplier({ accessCode: 'ac', secretKey: 'sk', ordersEnabled: false, fetchImpl: api.impl });
+    await expect(s.cancel('89430')).resolves.toBeUndefined();
+    expect(api.calls.at(-1)).toMatchObject({ path: 'esim/query', body: { iccid: '89430' } });
   });
 });
